@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#17324d">
-<title>Fuel Daily Sales System - Online V4.7 Main Cashier & Bookkeeper</title>
+<title>Fuel Daily Sales System</title>
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--ink:#17212b;--muted:#65727e;--accent:#17324d;--ok:#18794e;--warn:#b45309;--line:#dce2e7}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
@@ -46,7 +46,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
  <div class="auth-card">
   <span class="badge">PRIVATE PROTOTYPE</span>
   <h1>Fuel Daily Sales System</h1>
-  <p>Online V4.7 • Main Cashier / Bookkeeper</p>
+  <p>Final • Main Cashier / Bookkeeper</p>
   <div class="viewer-note">This prototype does not connect to the cloud yet. The role selector below is only for testing the interface. Real access will later use individual authenticated accounts and database-level permissions.</div>
   <div style="height:14px"></div>
   <label>Your Name</label><input id="demoName" placeholder="Authorized user">
@@ -71,7 +71,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
  </div>
 </div>
 <div id="appShell" class="hidden">
-<header><div class="topbar"><div><h1>Fuel Daily Sales System</h1><p>Online V4.7 • Cash Remittance & Bookkeeping</p></div><div class="who"><span id="roleBadge"></span> • <span id="userBadge"></span> <button onclick="demoSignOut()">Sign Out</button></div></div></header>
+<header><div class="topbar"><div><h1>Fuel Daily Sales System</h1><p>Sales, Cash Remittance & Bookkeeping</p></div><div class="who"><span id="roleBadge"></span> • <span id="userBadge"></span> <button onclick="demoSignOut()">Sign Out</button></div></div></header>
 <div class="storebar"><div class="inner"><select id="activeStore" onchange="changeStore()"></select><span id="accessLabel"></span></div></div>
 <main>
 <section id="dashboard">
