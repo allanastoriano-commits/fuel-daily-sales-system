@@ -76,6 +76,15 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
   <div style="height:14px"></div>
   <button onclick="onlineSignIn()">Sign In</button>
   <button class="secondary" style="margin-top:8px" onclick="onlineSignUp()">Create User Account</button>
+  <button class="secondary" style="margin-top:8px" onclick="onlineRequestPasswordReset()">Forgot Password / Reset Password</button>
+  <div id="passwordRecoveryPanel" class="hidden" style="margin-top:14px;padding:14px;border:1px solid #cbd3da;border-radius:12px;background:#f8fafb">
+    <b>Set a New Password</b>
+    <p class="muted" style="margin:6px 0 10px">After opening the reset link from your email, enter your new password below.</p>
+    <label>New Password</label><input id="recoveryPassword1" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+    <div style="height:8px"></div>
+    <label>Confirm New Password</label><input id="recoveryPassword2" type="password" autocomplete="new-password" placeholder="Re-enter new password">
+    <button style="margin-top:10px" onclick="saveRecoveredPassword()">Save New Password</button>
+  </div>
   <div id="authStatus" class="muted" style="margin-top:10px"></div>
   <small>New accounts remain pending until the Admin assigns a role and, when applicable, a store.</small>
  </div>
@@ -836,6 +845,7 @@ let mcloiSessionUser = null;
 let mcloiPriceCache = {};
 let mcloiPriceMeta = {};
 let mcloiOnlineReady = false;
+let mcloiPasswordRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
 sessionStorage.removeItem('fuelProtoSession');
 
 function authMessage(msg, good=false){
@@ -870,6 +880,41 @@ async function onlineSignIn(){
   await bootOnlineSession();
 }
 
+window.onlineRequestPasswordReset=async function(){
+  const email=(document.getElementById('authEmail').value||'').trim();
+  if(!email){authMessage('Enter the account email first, then tap Forgot Password / Reset Password.');return;}
+  authMessage('Sending password reset email...');
+  const redirectTo='https://allanastoriano-commits.github.io/fuel-daily-sales-system/';
+  const {error}=await mcloiDb.auth.resetPasswordForEmail(email,{redirectTo});
+  if(error){authMessage('Could not send password reset email: '+cleanError(error));return;}
+  authMessage('Password reset email sent. Open the email on this phone, tap the reset link, then enter a new password here.',true);
+};
+
+function showPasswordRecoveryPanel(){
+  mcloiPasswordRecovery=true;
+  document.getElementById('appShell').classList.add('hidden');
+  document.getElementById('authScreen').classList.remove('hidden');
+  const p=document.getElementById('passwordRecoveryPanel');
+  if(p)p.classList.remove('hidden');
+}
+
+window.saveRecoveredPassword=async function(){
+  const p1=document.getElementById('recoveryPassword1').value||'';
+  const p2=document.getElementById('recoveryPassword2').value||'';
+  if(p1.length<8){authMessage('Use a new password of at least 8 characters.');return;}
+  if(p1!==p2){authMessage('The two new passwords do not match.');return;}
+  authMessage('Saving new password...');
+  const {error}=await mcloiDb.auth.updateUser({password:p1});
+  if(error){authMessage('Password could not be updated: '+cleanError(error));return;}
+  document.getElementById('recoveryPassword1').value='';
+  document.getElementById('recoveryPassword2').value='';
+  const panel=document.getElementById('passwordRecoveryPanel'); if(panel)panel.classList.add('hidden');
+  mcloiPasswordRecovery=false;
+  if(window.history&&window.history.replaceState)window.history.replaceState(null,'',window.location.pathname);
+  authMessage('Password updated successfully. Opening your authorized account...',true);
+  await bootOnlineSession();
+};
+
 window.demoSignOut=async function(){
   await mcloiDb.auth.signOut();
   mcloiSessionUser=null; currentRole=''; currentStore=''; currentUser='';
@@ -886,6 +931,11 @@ async function getMyProfile(){
 }
 
 async function bootOnlineSession(){
+  if(mcloiPasswordRecovery){
+    showPasswordRecoveryPanel();
+    authMessage('Reset link verified. Enter and confirm your new password below.',true);
+    return;
+  }
   const {data:{session}}=await mcloiDb.auth.getSession();
   if(!session){
     document.getElementById('authScreen').classList.remove('hidden');
@@ -1172,7 +1222,14 @@ window.showPage=function(id){
   if(id==='record')loadDispenserVerification();
 };
 
-mcloiDb.auth.onAuthStateChange((event,session)=>{ if(event==='SIGNED_OUT'){mcloiSessionUser=null;} });
+mcloiDb.auth.onAuthStateChange((event,session)=>{
+  if(event==='SIGNED_OUT'){mcloiSessionUser=null;}
+  if(event==='PASSWORD_RECOVERY'){
+    mcloiSessionUser=session?.user||null;
+    showPasswordRecoveryPanel();
+    authMessage('Reset link verified. Enter and confirm your new password below.',true);
+  }
+});
 window.addEventListener('load',()=>{ setTimeout(bootOnlineSession,0); });
 </script>
 
