@@ -40,6 +40,11 @@ nav button{border-radius:0;background:#fff;color:#34424f;font-size:12px;padding:
 small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:#fafbfc}.tx b{display:block}.tx small{display:block;margin-top:3px}.mini{width:auto;padding:7px 10px;font-size:12px;margin-top:7px;background:#9f2d2d} table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left}
 .total{font-size:25px;font-weight:900}.danger{background:#9f2d2d}
 </style>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#173a59">
+<link rel="apple-touch-icon" href="icon-192.png">
+
 </head>
 <body>
 <div id="authScreen" class="auth-wrap">
@@ -812,4 +817,13 @@ let lastCalendarDate=localDateISO();
 setInterval(()=>{const nowDay=localDateISO();if(nowDay!==lastCalendarDate){lastCalendarDate=nowDay;const draft=JSON.parse(localStorage.getItem('fuelDraft')||'null');if(!draft||draft.date!==document.getElementById('date').value)setAutomaticDate(true);refreshSupplierOptions();}},60000);
 renderDeliveries();renderTransactions();renderHistory();calc();
 </script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(err => console.warn('Service worker registration failed:', err));
+  });
+}
+</script>
+
 </body></html>
