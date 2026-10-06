@@ -1,7 +1,7 @@
 {
   "name": "Fuel Daily Sales System",
   "short_name": "Fuel Sales",
-  "description": "Sales, cash remittance and bookkeeping system for McLoi Petro Gas Station.",
+  "description": "Secure online sales, cash remittance, inventory and bookkeeping system for McLoi Petro Gas Station.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -49,30 +49,19 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
 <body>
 <div id="authScreen" class="auth-wrap">
  <div class="auth-card">
-  <span class="badge">PRIVATE PROTOTYPE</span>
+  <span class="badge">SECURE ONLINE SYSTEM</span>
   <h1>Fuel Daily Sales System</h1>
-  <p>Final • Main Cashier / Bookkeeper</p>
-  <div class="viewer-note">This prototype does not connect to the cloud yet. The role selector below is only for testing the interface. Real access will later use individual authenticated accounts and database-level permissions.</div>
+  <p>Sales, Cash Remittance &amp; Bookkeeping</p>
+  <div class="viewer-note">Records are synchronized through the online database. Each user signs in with an individual account and receives only the access assigned by the Admin.</div>
   <div style="height:14px"></div>
-  <label>Your Name</label><input id="demoName" placeholder="Authorized user">
+  <label>Email</label><input id="authEmail" type="email" autocomplete="username" placeholder="name@example.com">
   <div style="height:10px"></div>
-  <label>Test Role</label>
-  <select id="demoRole">
-    <option value="admin">Admin</option>
-    <option value="bookkeeper">Main Cashier / Bookkeeper</option>
-    <option value="personnel">Store Cashier / Personnel</option>
-    <option value="viewer">Family Viewer</option>
-  </select>
-  <div style="height:10px"></div>
-  <label>Assigned Store</label>
-  <select id="demoStore">
-    <option value="store1">Store 1 - Main</option>
-    <option value="store2">Store 2</option>
-    <option value="store3">Store 3</option>
-    <option value="store4">Store 4</option>
-    <option value="store5">Store 5</option>
-  </select>
-  <div style="height:14px"></div><button onclick="demoSignIn()">Enter Prototype</button>
+  <label>Password</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="Password">
+  <div style="height:14px"></div>
+  <button onclick="onlineSignIn()">Sign In</button>
+  <button class="secondary" style="margin-top:8px" onclick="onlineSignUp()">Create User Account</button>
+  <div id="authStatus" class="muted" style="margin-top:10px"></div>
+  <small>New accounts remain pending until the Admin assigns a role and, when applicable, a store.</small>
  </div>
 </div>
 <div id="appShell" class="hidden">
@@ -80,7 +69,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
 <div class="storebar"><div class="inner"><select id="activeStore" onchange="changeStore()"></select><span id="accessLabel"></span></div></div>
 <main>
 <section id="dashboard">
-<div class="card"><div class="topbar"><div><b>ACTIVE STORE</b><div id="dashStoreName" style="font-size:20px;font-weight:900;margin-top:4px">Store 1 - Main</div></div><span class="badge" id="storeDataBadge">SEPARATE DATA</span></div><p class="muted">Sales, inventory, purchases, payables and history shown below belong only to this store.</p>
+<div class="card"><div class="topbar"><div><b>ACTIVE STORE</b><div id="dashStoreName" style="font-size:20px;font-weight:900;margin-top:4px">Store 1 - Main</div></div><span class="badge" id="storeDataBadge">ONLINE DATA</span></div><p class="muted">Sales, inventory, purchases, payables and history shown below belong only to this store.</p>
 <div id="priceStatusLine" class="viewer-note" style="margin-top:10px">Selling prices carry forward until Admin changes them.</div>
 <div style="margin-top:12px"><b>Current Selling Price / Liter</b>
 <div class="metrics" style="margin-top:8px">
@@ -246,14 +235,14 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
 </div>
 <div class="card"><h2>Store Overview</h2><div id="adminStoreOverview"></div><button class="secondary" onclick="renderAdminOverview()">Refresh Store Overview</button></div>
 <div class="card" style="border:2px solid #9f2d2d">
- <h2>Start Actual Use / Clear Test Data</h2>
+ <h2>Local Prototype Cleanup</h2>
  <p class="muted">Admin-only control for clearing prototype/test transactions before the system begins actual operation. Current Admin selling prices are preserved.</p>
  <div style="padding:12px;border-radius:10px;background:#fff1f0;color:#8a1f1f;margin:10px 0">
-  <b>Warning:</b> This permanently clears test drafts, closed-day history, remittances, central cashbook entries, temporary supplier names, price-verification records, and test audit records on this device. It cannot be undone unless you exported a backup first.
+  <b>Online version:</b> the shared online database starts clean. This control clears only old prototype/test data cached on this device; it does not delete shared online records.
  </div>
  <button class="secondary" onclick="exportData()">Export Backup Before Clearing</button>
  <div style="height:8px"></div>
- <button class="danger" onclick="clearTestDataForActualUse()">Clear Test Data & Start Actual Use</button>
+ <button class="danger" onclick="clearTestDataForActualUse()">Clear Old Local Test Data</button>
  <div id="clearDataStatus" class="muted" style="margin-top:8px"></div>
 </div>
 <div class="card"><h2>Planned User Assignment</h2>
@@ -265,7 +254,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
 </section>
 
 <section id="history" class="hidden"><div class="card"><h2>Daily History</h2><div id="historyList"><small>No closed records yet.</small></div></div></section>
-<section id="settings" class="hidden"><div class="card"><h2>Prototype Status</h2><p>This V4.8 final structure preserves the V3.2 sales, cash, inventory and supplier-payable calculations while adding a test interface for multiple stores and four access roles.</p><p><b>Not yet cloud-connected:</b> the role selector is only a simulation. Production access will use individual authenticated accounts, private photo storage, Row Level Security, live synchronization and an audit trail.</p><button class="secondary" onclick="exportData()">Export Local Test Backup (JSON)</button></div></section>
+<section id="settings" class="hidden"><div class="card"><h2>System Status</h2><p>This online version preserves the sales, cash, inventory and supplier-payable calculations while adding authenticated multi-user access, shared records, Row Level Security and live database synchronization.</p><p><b>Online database:</b> records saved or closed from authorized devices are stored centrally. Local browser storage is used only as a convenience cache and is not the official shared record.</p><button class="secondary" onclick="exportData()">Export Online Backup (JSON)</button></div></section>
 </main>
 
 <nav id="mainNav" style="grid-template-columns:repeat(6,1fr)">
@@ -278,6 +267,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
 </nav>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 
 function storeKey(base){
@@ -816,6 +806,358 @@ refreshSupplierOptions();
 let lastCalendarDate=localDateISO();
 setInterval(()=>{const nowDay=localDateISO();if(nowDay!==lastCalendarDate){lastCalendarDate=nowDay;const draft=JSON.parse(localStorage.getItem('fuelDraft')||'null');if(!draft||draft.date!==document.getElementById('date').value)setAutomaticDate(true);refreshSupplierOptions();}},60000);
 renderDeliveries();renderTransactions();renderHistory();calc();
+</script>
+
+
+<script>
+// === McLoi secure online synchronization layer ===
+const MCLOI_SUPABASE_URL = 'https://jzujywhmvwknzzjpcofo.supabase.co';
+const MCLOI_SUPABASE_KEY = 'sb_publishable_SjKg7SU-ih9PU8hEIjwKoA_co4Dvw2p';
+const mcloiDb = window.supabase.createClient(MCLOI_SUPABASE_URL, MCLOI_SUPABASE_KEY, {
+  auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
+});
+let mcloiSessionUser = null;
+let mcloiPriceCache = {};
+let mcloiPriceMeta = {};
+let mcloiOnlineReady = false;
+sessionStorage.removeItem('fuelProtoSession');
+
+function authMessage(msg, good=false){
+  const e=document.getElementById('authStatus'); if(!e)return;
+  e.innerHTML=good?'<div class="status">'+msg+'</div>':msg;
+}
+function cleanError(err){ return (err&&err.message)?err.message:String(err||'Unknown error'); }
+
+async function onlineSignUp(){
+  const email=(document.getElementById('authEmail').value||'').trim();
+  const password=document.getElementById('authPassword').value||'';
+  if(!email || password.length<6){authMessage('Enter a valid email and a password of at least 6 characters.');return;}
+  authMessage('Creating account...');
+  const displayName=email.split('@')[0];
+  const {data,error}=await mcloiDb.auth.signUp({email,password,options:{data:{display_name:displayName}}});
+  if(error){authMessage('Account could not be created: '+cleanError(error));return;}
+  if(data.session){
+    authMessage('Account created. Waiting for Admin access approval.',true);
+    await bootOnlineSession();
+  } else {
+    authMessage('Account created. If Supabase asks for email confirmation, open the confirmation email first, then return here and sign in.',true);
+  }
+}
+
+async function onlineSignIn(){
+  const email=(document.getElementById('authEmail').value||'').trim();
+  const password=document.getElementById('authPassword').value||'';
+  if(!email || !password){authMessage('Enter your email and password.');return;}
+  authMessage('Signing in...');
+  const {error}=await mcloiDb.auth.signInWithPassword({email,password});
+  if(error){authMessage('Sign in failed: '+cleanError(error));return;}
+  await bootOnlineSession();
+}
+
+window.demoSignOut=async function(){
+  await mcloiDb.auth.signOut();
+  mcloiSessionUser=null; currentRole=''; currentStore=''; currentUser='';
+  document.getElementById('appShell').classList.add('hidden');
+  document.getElementById('authScreen').classList.remove('hidden');
+  authMessage('Signed out.');
+};
+
+async function getMyProfile(){
+  if(!mcloiSessionUser)return null;
+  const {data,error}=await mcloiDb.from('mcloi_profiles').select('user_id,display_name,role,assigned_store_id,active').eq('user_id',mcloiSessionUser.id).maybeSingle();
+  if(error)throw error;
+  return data;
+}
+
+async function bootOnlineSession(){
+  const {data:{session}}=await mcloiDb.auth.getSession();
+  if(!session){
+    document.getElementById('authScreen').classList.remove('hidden');
+    document.getElementById('appShell').classList.add('hidden');
+    return;
+  }
+  mcloiSessionUser=session.user;
+  let profile;
+  try{ profile=await getMyProfile(); }catch(e){authMessage('Could not load user access: '+cleanError(e));return;}
+  if(!profile || !profile.active || profile.role==='pending'){
+    document.getElementById('authScreen').classList.remove('hidden');
+    document.getElementById('appShell').classList.add('hidden');
+    authMessage('Your account is registered but is still waiting for Admin approval.');
+    return;
+  }
+  currentRole=profile.role;
+  currentStore=profile.assigned_store_id||'store1';
+  currentUser=profile.display_name || session.user.email || 'Authorized User';
+  await applyOnlineAccess();
+}
+
+async function applyOnlineAccess(){
+  document.getElementById('authScreen').classList.add('hidden');
+  document.getElementById('appShell').classList.remove('hidden');
+  document.getElementById('roleBadge').textContent=currentRole==='admin'?'ADMIN':currentRole==='bookkeeper'?'MAIN CASHIER / BOOKKEEPER':currentRole==='personnel'?'STORE CASHIER / PERSONNEL':'FAMILY VIEWER';
+  document.getElementById('userBadge').textContent=currentUser;
+  const s=document.getElementById('activeStore');
+  const allowed=currentRole==='admin'||currentRole==='bookkeeper'||currentRole==='viewer'?prototypeStores:prototypeStores.filter(x=>x.id===currentStore);
+  s.innerHTML=allowed.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+  s.value=allowed.some(x=>x.id===currentStore)?currentStore:allowed[0].id;
+  currentStore=s.value;
+  document.getElementById('accessLabel').textContent=currentRole==='admin'?'All-store administration':currentRole==='bookkeeper'?'All-store financial access':currentRole==='viewer'?'Read-only monitoring':'Assigned store only';
+  document.getElementById('n-admin').classList.toggle('hidden',currentRole!=='admin');
+  document.getElementById('n-bookkeeper').classList.toggle('hidden',!(currentRole==='bookkeeper'||currentRole==='admin'));
+  document.getElementById('n-record').classList.toggle('hidden',currentRole==='viewer'||currentRole==='bookkeeper');
+  document.querySelectorAll('#record input,#record select,#record textarea,#record button').forEach(el=>el.disabled=currentRole==='viewer'||currentRole==='bookkeeper');
+  document.getElementById('user').value=currentUser;
+  configureDateAccess(); setAutomaticDate(true);
+  document.getElementById('dashStoreName').textContent=prototypeStores.find(x=>x.id===currentStore)?.name||currentStore;
+  const badge=document.getElementById('storeDataBadge'); if(badge)badge.textContent='ONLINE SYNC';
+  await renderStorePrices();
+  await loadOnlineDraft();
+  await renderHistory();
+  if(currentRole==='admin') await renderAdminOverview();
+  if(currentRole==='bookkeeper'||currentRole==='admin') await renderBookkeeper();
+  const a=document.getElementById('dashboardAction');
+  if(currentRole==='viewer'){a.textContent='View Daily History';a.onclick=()=>showPage('history');}
+  else if(currentRole==='bookkeeper'){a.textContent='Open Main Cashier';a.onclick=()=>showPage('bookkeeper');}
+  else {a.textContent="Start / Continue Today's Record";a.onclick=()=>showPage('record');}
+  mcloiOnlineReady=true;
+  showPage('dashboard');
+}
+
+window.changeStore=async function(){
+  currentStore=document.getElementById('activeStore').value;
+  document.getElementById('dashStoreName').textContent=prototypeStores.find(x=>x.id===currentStore)?.name||currentStore;
+  await renderStorePrices();
+  await loadOnlineDraft();
+  await renderHistory();
+  if(currentRole==='admin')await renderAdminOverview();
+  if(currentRole==='bookkeeper'||currentRole==='admin')await renderBookkeeper();
+  calc(); showPage('dashboard');
+};
+
+function getStorePrices(){ return mcloiPriceCache[currentStore] || {regular:0,premium:0,diesel:0}; }
+window.getStorePrices=getStorePrices;
+
+window.renderStorePrices=async function(){
+  if(!mcloiSessionUser)return;
+  const {data,error}=await mcloiDb.from('mcloi_store_prices').select('store_id,regular,premium,diesel,updated_at').eq('store_id',currentStore).maybeSingle();
+  if(error){console.warn(error);return;}
+  const p=data?{regular:Number(data.regular||0),premium:Number(data.premium||0),diesel:Number(data.diesel||0)}:{regular:0,premium:0,diesel:0};
+  mcloiPriceCache[currentStore]=p; mcloiPriceMeta[currentStore]=data||{};
+  localStorage.setItem(priceKey(),JSON.stringify(p));
+  const r=document.getElementById('priceRegularView'), pr=document.getElementById('pricePremiumView'), d=document.getElementById('priceDieselView');
+  if(r)r.textContent=moneyPrice(p.regular); if(pr)pr.textContent=moneyPrice(p.premium); if(d)d.textContent=moneyPrice(p.diesel);
+  const ar=document.getElementById('adminPriceRegular'), ap=document.getElementById('adminPricePremium'), ad=document.getElementById('adminPriceDiesel');
+  if(ar)ar.value=p.regular||''; if(ap)ap.value=p.premium||''; if(ad)ad.value=p.diesel||'';
+  await loadDispenserVerification();
+};
+
+window.saveStorePrices=async function(){
+  if(currentRole!=='admin'){alert('Only Admin can change selling prices.');return;}
+  const old=getStorePrices();
+  const p={regular:Number(document.getElementById('adminPriceRegular').value||0),premium:Number(document.getElementById('adminPricePremium').value||0),diesel:Number(document.getElementById('adminPriceDiesel').value||0)};
+  if(Object.values(p).some(v=>v<0)){alert('Selling price cannot be negative.');return;}
+  const changed=['regular','premium','diesel'].some(f=>Math.abs(Number(old[f]||0)-Number(p[f]||0))>=0.005);
+  const {error}=await mcloiDb.from('mcloi_store_prices').upsert({store_id:currentStore,...p,updated_by:mcloiSessionUser.id,updated_at:new Date().toISOString()},{onConflict:'store_id'});
+  if(error){alert('Price update failed: '+cleanError(error));return;}
+  if(changed){
+    await mcloiDb.from('mcloi_price_audit').insert({store_id:currentStore,...p,changed_by:mcloiSessionUser.id});
+  }
+  mcloiPriceCache[currentStore]=p;
+  await renderStorePrices();
+  const msg=document.getElementById('priceSavedMsg'); if(msg)msg.textContent='Selling prices saved online for '+(prototypeStores.find(x=>x.id===currentStore)?.name||currentStore)+'. Personnel must verify the physical dispenser after a price change.';
+};
+
+window.loadDispenserVerification=async function(){
+  const p=getStorePrices();
+  const configured=['regular','premium','diesel'].every(f=>Number(p[f]||0)>0);
+  let required=configured;
+  if(configured && mcloiSessionUser){
+    const {data}=await mcloiDb.from('mcloi_dispenser_verifications').select('official_prices,actual_prices,matched,verified_at').eq('store_id',currentStore).order('verified_at',{ascending:false}).limit(1).maybeSingle();
+    if(data){
+      const same=['regular','premium','diesel'].every(f=>Math.abs(Number(data.official_prices?.[f]||0)-Number(p[f]||0))<0.005);
+      required=!(same && data.matched);
+      if(same){
+        ['regular','premium','diesel'].forEach(f=>{const id='dispPrice'+f.charAt(0).toUpperCase()+f.slice(1);const el=document.getElementById(id);if(el)el.value=data.actual_prices?.[f]||'';});
+      }
+    }
+  }
+  setPriceVerificationRequired(required);
+  updatePriceVerificationVisibility();
+  verifyDispenserPrices();
+};
+
+window.saveDispenserVerification=async function(){
+  if(currentRole==='viewer'||currentRole==='bookkeeper'){alert('This role cannot save dispenser verification.');return;}
+  const v=verifyDispenserPrices(); if(!v||!v.adminPricesSet){alert('Admin must set the official selling prices first.');return;} if(!v.complete){alert('Please enter the actual displayed price for all three dispensers.');return;}
+  const {error}=await mcloiDb.from('mcloi_dispenser_verifications').insert({store_id:currentStore,business_date:document.getElementById('date').value||localDateISO(),official_prices:v.official,actual_prices:v.actual,matched:v.allMatch,verified_by:mcloiSessionUser.id});
+  if(error){alert('Verification could not be saved online: '+cleanError(error));return;}
+  setPriceVerificationRequired(!v.allMatch); updatePriceVerificationVisibility();
+  const msg=document.getElementById('dispVerifySaved'); if(msg)msg.textContent=v.allMatch?'Opening dispenser prices verified and saved online.':'Mismatch saved online. Correct the dispenser price immediately.';
+};
+
+function clearRecordForm(){
+  fuels.forEach(([k])=>{['OA','OL','CA','CL','BeginStock','ActualStock'].forEach(s=>{const e=document.getElementById(k+s);if(e)e.value='';}); const img=document.getElementById(k+'Preview');if(img){img.src='';img.style.display='none';}});
+  ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('remarks').value=''; deliveries=[]; transactions=[]; renderDeliveries();renderTransactions();syncCashOut();updatePhotoCount();calc();
+}
+function applyRecordToForm(r){
+  clearRecordForm(); if(!r)return;
+  document.getElementById('date').value=r.date||localDateISO(); document.getElementById('user').value=currentUser;
+  fuels.forEach(([k])=>{const f=r.fuels?.[k]||{}; document.getElementById(k+'OA').value=f.openingAmount||'';document.getElementById(k+'OL').value=f.openingLiters||'';document.getElementById(k+'CA').value=f.closingAmount||'';document.getElementById(k+'CL').value=f.closingLiters||''; const inv=r.inventory?.[k]||{};document.getElementById(k+'BeginStock').value=inv.beginningStock||'';document.getElementById(k+'ActualStock').value=inv.actualEnding||'';});
+  const f=r.financial||{}; ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{document.getElementById(id).value=f[id]||'';}); document.getElementById('remarks').value=f.remarks||'';
+  deliveries=Array.isArray(r.deliveries)?r.deliveries:[]; transactions=Array.isArray(r.transactions)?r.transactions:[]; renderDeliveries();renderTransactions();syncCashOut();calc();
+}
+
+async function loadOnlineDraft(){
+  if(!mcloiSessionUser)return;
+  const today=localDateISO(); setAutomaticDate(true);
+  const {data,error}=await mcloiDb.from('mcloi_daily_records').select('record_data,business_date,status').eq('store_id',currentStore).eq('business_date',today).eq('status','draft').maybeSingle();
+  if(error){console.warn(error);clearRecordForm();return;}
+  if(data?.record_data){applyRecordToForm(data.record_data);} else {clearRecordForm(); document.getElementById('date').value=today; document.getElementById('user').value=currentUser;}
+}
+window.loadDraft=loadOnlineDraft;
+
+function recordTotals(r){
+  let totalSales=0,totalLiters=0; Object.values(r.fuels||{}).forEach(f=>{totalSales+=Number(f.sales||0);totalLiters+=Number(f.litersSold||0);});
+  const fuelCash=(r.deliveries||[]).filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
+  const supplierCash=(r.deliveries||[]).reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
+  const expected=Number(r.financial?.cashSales||0)+Number(r.financial?.cashIn||0)-Number(r.financial?.expenses||0)-Number(r.financial?.withdrawal||0)-fuelCash-supplierCash;
+  const actual=Number(r.financial?.actualCash||0); return {totalSales,totalLiters,expected,actual,variance:actual-expected};
+}
+
+window.saveDraft=async function(){
+  if(!(currentRole==='admin'||currentRole==='personnel')){alert('This role cannot save daily records.');return;}
+  const r=getRecord(); const t=recordTotals(r); r.user=currentUser;
+  const payload={store_id:currentStore,business_date:r.date,status:'draft',cashier_name:currentUser,record_data:r,total_sales:t.totalSales,total_liters:t.totalLiters,expected_cash:t.expected,actual_cash:t.actual,cash_variance:t.variance,updated_by:mcloiSessionUser.id,created_by:mcloiSessionUser.id};
+  const {error}=await mcloiDb.from('mcloi_daily_records').upsert(payload,{onConflict:'store_id,business_date'});
+  if(error){alert('Draft could not be saved online: '+cleanError(error));return;}
+  localStorage.setItem(storeKey('fuelOnlineDraftCache'),JSON.stringify(r));
+  document.getElementById('saveStatus').innerHTML='<div class="status">Draft saved online and synchronized.</div>';
+};
+
+async function uploadClosingPhotos(r){
+  for(const [k,n] of fuels){
+    const input=document.getElementById(k+'Photo'); if(!input?.files?.[0])continue;
+    const file=input.files[0]; const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-zA-Z0-9]/g,'').toLowerCase()||'jpg';
+    const path=`${currentStore}/${r.date}/${mcloiSessionUser.id}/${k}-${Date.now()}.${ext}`;
+    const {error}=await mcloiDb.storage.from('mcloi-evidence').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
+    if(error)throw error; r.fuels[k].photoPath=path; r.fuels[k].photoAttached=true;
+  }
+}
+
+window.closeDay=async function(){
+  if(!(currentRole==='admin'||currentRole==='personnel')){alert('This role cannot close a daily record.');return;}
+  let r=getRecord();
+  for(const [k,n] of fuels){if(r.fuels[k].closingAmount<r.fuels[k].openingAmount||r.fuels[k].closingLiters<r.fuels[k].openingLiters){alert(n+' closing reading cannot be lower than opening reading.');return;}}
+  const missing=fuels.filter(([k])=>!document.getElementById(k+'Photo').files.length); if(missing.length && !confirm('One or more closing dispenser photos are missing. Close the day anyway?'))return;
+  const disp=salesTotal(),pay=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales'); if(Math.abs(pay-disp)>0.009&&!document.getElementById('remarks').value.trim()){alert('Payment total does not match dispenser sales. Enter a remarks/explanation before closing.');return;}
+  const t=recordTotals(r); if(Math.abs(t.variance)>0.009&&!document.getElementById('remarks').value.trim()){alert('There is a cash over/short amount. Enter a remarks/explanation before closing.');return;}
+  if(!confirm('Close and lock this daily record online?'))return;
+  try{ await uploadClosingPhotos(r); }catch(e){ if(!confirm('One or more photos could not be uploaded: '+cleanError(e)+'\nClose the record without the failed photo upload?'))return; }
+  r.closed=true; r.closedAt=new Date().toISOString(); r.user=currentUser;
+  const draftPayload={store_id:currentStore,business_date:r.date,status:'draft',cashier_name:currentUser,record_data:r,total_sales:t.totalSales,total_liters:t.totalLiters,expected_cash:t.expected,actual_cash:t.actual,cash_variance:t.variance,updated_by:mcloiSessionUser.id,created_by:mcloiSessionUser.id};
+  let q=await mcloiDb.from('mcloi_daily_records').upsert(draftPayload,{onConflict:'store_id,business_date'}).select('id').single();
+  if(q.error){alert('Daily record could not be prepared online: '+cleanError(q.error));return;}
+  const {error}=await mcloiDb.from('mcloi_daily_records').update({status:'closed',record_data:r,total_sales:t.totalSales,total_liters:t.totalLiters,expected_cash:t.expected,actual_cash:t.actual,cash_variance:t.variance,closed_by:mcloiSessionUser.id,closed_at:new Date().toISOString(),updated_by:mcloiSessionUser.id}).eq('id',q.data.id);
+  if(error){alert('Daily record could not be closed online: '+cleanError(error));return;}
+  localStorage.removeItem(storeKey('fuelOnlineDraftCache')); await renderHistory(); clearRecordForm(); alert('Daily record closed and saved online.'); showPage('history');
+};
+
+window.renderHistory=async function(){
+  const el=document.getElementById('historyList'); if(!el||!mcloiSessionUser)return;
+  const {data,error}=await mcloiDb.from('mcloi_daily_records').select('business_date,total_sales,total_liters,cash_variance,cashier_name').eq('store_id',currentStore).eq('status','closed').order('business_date',{ascending:false}).limit(120);
+  if(error){el.innerHTML='<small>Could not load online history.</small>';return;}
+  if(!data?.length){el.innerHTML='<small>No closed online records yet.</small>';return;}
+  el.innerHTML='<table><thead><tr><th>Date</th><th>Sales</th><th>Liters</th></tr></thead><tbody>'+data.map(r=>`<tr><td>${r.business_date}</td><td>${peso(r.total_sales)}</td><td>${Number(r.total_liters||0).toFixed(2)} L</td></tr>`).join('')+'</tbody></table>';
+};
+
+window.renderAdminOverview=async function(){
+  const box=document.getElementById('adminStoreOverview'); if(!box||currentRole!=='admin')return;
+  const {data,error}=await mcloiDb.from('mcloi_daily_records').select('store_id,status,business_date');
+  if(error){box.innerHTML='<small>Could not load store overview.</small>';return;}
+  box.innerHTML=prototypeStores.map(s=>{const rows=(data||[]).filter(x=>x.store_id===s.id);const closed=rows.filter(x=>x.status==='closed').length;const draft=rows.some(x=>x.status==='draft');return `<div style="padding:10px 0;border-bottom:1px solid #dde3e8"><b>${s.name}</b><br><span class="muted">${closed} closed day(s) • ${draft?'Draft available':'No current draft'}</span></div>`;}).join('');
+  await renderUserManagement();
+};
+
+function ensureUserManagementCard(){
+  const admin=document.getElementById('admin'); if(!admin||document.getElementById('mcloiUserAccessCard'))return;
+  const card=document.createElement('div'); card.className='card'; card.id='mcloiUserAccessCard'; card.innerHTML='<h2>Users & Access</h2><p class="muted">New accounts stay pending until Admin assigns the correct role. Store Cashier / Personnel must also be assigned to one store.</p><div id="mcloiUserList"><small>Loading users...</small></div>';
+  admin.appendChild(card);
+}
+async function renderUserManagement(){
+  if(currentRole!=='admin')return; ensureUserManagementCard(); const el=document.getElementById('mcloiUserList');
+  const {data,error}=await mcloiDb.from('mcloi_profiles').select('user_id,display_name,role,assigned_store_id,active,created_at').order('created_at',{ascending:true});
+  if(error){el.innerHTML='<small>Could not load users: '+cleanError(error)+'</small>';return;}
+  if(!data?.length){el.innerHTML='<small>No registered McLoi users yet.</small>';return;}
+  el.innerHTML=data.map(u=>`<div class="tx"><b>${u.display_name||'User'}</b><small>${u.role.toUpperCase()}${u.assigned_store_id?' • '+(prototypeStores.find(s=>s.id===u.assigned_store_id)?.name||u.assigned_store_id):''}</small><div class="grid" style="margin-top:8px"><div><label>Role</label><select id="role_${u.user_id}"><option value="pending" ${u.role==='pending'?'selected':''}>Pending</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option><option value="bookkeeper" ${u.role==='bookkeeper'?'selected':''}>Main Cashier / Bookkeeper</option><option value="personnel" ${u.role==='personnel'?'selected':''}>Store Cashier / Personnel</option><option value="viewer" ${u.role==='viewer'?'selected':''}>Family Viewer</option></select></div><div><label>Assigned Store</label><select id="store_${u.user_id}"><option value="">All / Not applicable</option>${prototypeStores.map(s=>`<option value="${s.id}" ${u.assigned_store_id===s.id?'selected':''}>${s.name}</option>`).join('')}</select></div></div><button style="margin-top:8px" onclick="updateUserAccess('${u.user_id}')">Save Access</button></div>`).join('');
+}
+window.updateUserAccess=async function(userId){
+  if(currentRole!=='admin')return; const role=document.getElementById('role_'+userId).value; let store=document.getElementById('store_'+userId).value||null;
+  if(role==='personnel'&&!store){alert('Assign a store to Store Cashier / Personnel.');return;} if(role!=='personnel')store=null;
+  const {error}=await mcloiDb.from('mcloi_profiles').update({role,assigned_store_id:store,active:true}).eq('user_id',userId); if(error){alert('Access update failed: '+cleanError(error));return;} alert('User access updated.'); await renderUserManagement();
+};
+
+async function getClosedRecordForRemit(store,date){
+  const {data}=await mcloiDb.from('mcloi_daily_records').select('id,expected_cash,cashier_name').eq('store_id',store).eq('business_date',date).eq('status','closed').maybeSingle(); return data||null;
+}
+async function populateRemitExpected(){
+  const store=document.getElementById('remitStore')?.value, date=document.getElementById('remitDate')?.value||localDateISO(); if(!store)return;
+  const r=await getClosedRecordForRemit(store,date); const exp=document.getElementById('remitExpected'); const c=document.getElementById('remitCashier');
+  if(exp)exp.value=r?Number(r.expected_cash||0).toFixed(2):''; if(c&&r)c.value=r.cashier_name||'';
+  const st=document.getElementById('remitStatus'); if(st&&!r)st.innerHTML='<small>No closed daily record found for this store/date.</small>';
+}
+window.initBookkeeper=function(){
+  const d=document.getElementById('remitDate'); if(d&&!d.value)d.value=localDateISO();
+  const s=document.getElementById('remitStore'); if(s&&s.options.length!==prototypeStores.length)s.innerHTML=prototypeStores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+  if(d&&!d.dataset.onlineBound){d.addEventListener('change',populateRemitExpected);d.dataset.onlineBound='1';}
+  if(s&&!s.dataset.onlineBound){s.addEventListener('change',populateRemitExpected);s.dataset.onlineBound='1';}
+  populateRemitExpected();
+};
+window.confirmRemittance=async function(){
+  if(!(currentRole==='bookkeeper'||currentRole==='admin')){alert('Only Main Cashier / Bookkeeper or Admin can confirm remittances.');return;}
+  const store=document.getElementById('remitStore').value,date=document.getElementById('remitDate').value||localDateISO(),actual=Number(document.getElementById('remitActual').value||0); if(actual<0){alert('Amount cannot be negative.');return;}
+  const rec=await getClosedRecordForRemit(store,date); if(!rec){alert('There is no closed daily record for this store and date.');return;}
+  const expected=Number(rec.expected_cash||0); const row={daily_record_id:rec.id,store_id:store,business_date:date,cashier_name:rec.cashier_name||document.getElementById('remitCashier').value.trim(),expected_amount:expected,actual_amount:actual,variance:actual-expected,note:document.getElementById('remitNote').value.trim(),confirmed_by:mcloiSessionUser.id};
+  const {error}=await mcloiDb.from('mcloi_remittances').insert(row); if(error){alert(error.code==='23505'?'This daily record has already been remitted.':'Remittance could not be saved: '+cleanError(error));return;}
+  document.getElementById('remitActual').value='';document.getElementById('remitNote').value='';document.getElementById('remitStatus').innerHTML='<div class="status">Cash receipt confirmed online and locked to the closed daily record.</div>';await renderBookkeeper();
+};
+window.addCashbookEntry=async function(){
+  if(!(currentRole==='bookkeeper'||currentRole==='admin'))return; const type=document.getElementById('bkType').value; const isIn=type==='Other Cash In'||type==='Borrowed Cash In'||type==='Payable Collection'; const amount=Number((isIn?document.getElementById('bkOtherIn'):document.getElementById('bkCashOut')).value||0); if(amount<=0){alert('Enter the cashbook amount.');return;}
+  const {error}=await mcloiDb.from('mcloi_cashbook').insert({business_date:localDateISO(),entry_type:type,direction:isIn?'in':'out',amount,description:document.getElementById('bkDesc').value.trim(),created_by:mcloiSessionUser.id}); if(error){alert('Cashbook entry failed: '+cleanError(error));return;}
+  document.getElementById('bkOtherIn').value='';document.getElementById('bkCashOut').value='';document.getElementById('bkDesc').value='';await renderBookkeeper();
+};
+window.renderBookkeeper=async function(){
+  if(!(currentRole==='bookkeeper'||currentRole==='admin')||!mcloiSessionUser)return; initBookkeeper();
+  const [{data:rs,error:er1},{data:cb,error:er2}]=await Promise.all([mcloiDb.from('mcloi_remittances').select('id,store_id,business_date,cashier_name,expected_amount,actual_amount,variance,note,confirmed_at').order('confirmed_at',{ascending:false}).limit(250),mcloiDb.from('mcloi_cashbook').select('id,business_date,entry_type,direction,amount,description,created_at').order('created_at',{ascending:false}).limit(250)]);
+  if(er1||er2){console.warn(er1||er2);return;} const today=localDateISO(),todayR=(rs||[]).filter(x=>x.business_date===today); const expected=todayR.reduce((a,x)=>a+Number(x.expected_amount||0),0),received=todayR.reduce((a,x)=>a+Number(x.actual_amount||0),0),variance=received-expected; const cashOnHand=(rs||[]).reduce((a,x)=>a+Number(x.actual_amount||0),0)+(cb||[]).reduce((a,x)=>a+(x.direction==='in'?1:-1)*Number(x.amount||0),0); const put=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=peso(v)}; put('bkExpected',expected);put('bkReceived',received);put('bkUnremitted',Math.max(0,expected-received));put('bkVariance',variance);put('bkCashOnHand',cashOnHand);
+  const rl=document.getElementById('remittanceList'); if(rl)rl.innerHTML=(rs||[]).length?(rs||[]).map(r=>`<div class="tx"><b>${prototypeStores.find(s=>s.id===r.store_id)?.name||r.store_id} — ${peso(r.actual_amount)}</b><small>${r.business_date} • ${r.cashier_name||'Cashier'} • Expected ${peso(r.expected_amount)} • Difference ${(Number(r.variance)>0?'+':'')+peso(r.variance)}${r.note?' • '+r.note:''}</small></div>`).join(''):'<small>No confirmed online remittances yet.</small>';
+  const cl=document.getElementById('cashbookList'); if(cl)cl.innerHTML=(cb||[]).length?(cb||[]).map(r=>`<div class="tx"><b>${r.entry_type}: ${r.direction==='in'?'+':'-'}${peso(r.amount)}</b><small>${r.business_date} • ${r.description||'No description'}</small></div>`).join(''):'<small>No online central cashbook entries yet.</small>';
+};
+
+window.exportData=async function(){
+  if(!mcloiSessionUser){alert('Sign in first.');return;}
+  const [a,b,c,d]=await Promise.all([mcloiDb.from('mcloi_daily_records').select('*'),mcloiDb.from('mcloi_remittances').select('*'),mcloiDb.from('mcloi_cashbook').select('*'),mcloiDb.from('mcloi_store_prices').select('*')]);
+  const data={exportedAt:new Date().toISOString(),dailyRecords:a.data||[],remittances:b.data||[],centralCashbook:c.data||[],storePrices:d.data||[]}; const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='fuel-sales-online-backup-'+localDateISO()+'.json';link.click(); setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+};
+
+window.clearTestDataForActualUse=function(){
+  if(currentRole!=='admin'){alert('Only Admin can clear local test data.');return;}
+  if(!confirm('Clear old prototype/test data cached on this device? Shared online records will NOT be deleted.'))return;
+  const preserve=['fuelSellingPrices__']; const keys=[]; for(let i=0;i<localStorage.length;i++)keys.push(localStorage.key(i)); keys.forEach(k=>{if(k&&k.startsWith('fuel')&&!preserve.some(p=>k.startsWith(p)))localStorage.removeItem(k);}); alert('Old local prototype data was cleared. Shared online records were not changed.');
+};
+
+// Keep Admin page user controls present and use online renderers when pages open.
+const originalShowPage=window.showPage;
+window.showPage=function(id){
+  originalShowPage(id);
+  if(id==='history')renderHistory();
+  if(id==='admin'&&currentRole==='admin'){renderAdminOverview();renderStorePrices();}
+  if(id==='bookkeeper'&&(currentRole==='bookkeeper'||currentRole==='admin'))renderBookkeeper();
+  if(id==='record')loadDispenserVerification();
+};
+
+mcloiDb.auth.onAuthStateChange((event,session)=>{ if(event==='SIGNED_OUT'){mcloiSessionUser=null;} });
+window.addEventListener('load',()=>{ setTimeout(bootOnlineSession,0); });
 </script>
 
 <script>
