@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17324d">
+<title>Fuel Daily Sales System - Online V4.7 Main Cashier & Bookkeeper</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#17212b;--muted:#65727e;--accent:#17324d;--ok:#18794e;--warn:#b45309;--line:#dce2e7}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--accent);color:#fff;padding:18px 16px 14px;position:sticky;top:0;z-index:5}
+header h1{font-size:20px;margin:0} header p{margin:4px 0 0;font-size:13px;opacity:.85}
+.auth-wrap{min-height:100vh;display:grid;place-items:center;padding:20px;background:#eef2f5}
+.auth-card{width:min(520px,100%);background:#fff;border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 8px 28px #00000012}
+.auth-card h1{margin:0 0 6px;font-size:24px;color:var(--accent)} .auth-card p{color:var(--muted)}
+.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#e8eef4;color:var(--accent);font-size:12px;font-weight:800}
+.topbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.topbar .who{font-size:12px;opacity:.9}.topbar button{width:auto;padding:7px 10px;background:#fff;color:var(--accent);font-size:12px}
+.storebar{background:#fff;border-bottom:1px solid var(--line);padding:9px 14px;position:sticky;top:67px;z-index:4}
+.storebar .inner{max-width:760px;margin:auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.storebar select{padding:9px}.storebar span{font-size:12px;font-weight:800;color:var(--muted)}
+.viewer-note{background:#eef6f1;color:var(--ok);padding:10px;border-radius:10px;font-size:13px}
+.admin-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(max-width:520px){.admin-grid{grid-template-columns:1fr}}
+main{max-width:760px;margin:auto;padding:14px 14px 90px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:12px;box-shadow:0 2px 8px #0000000b}
+h2{font-size:18px;margin:0 0 12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.grid{grid-template-columns:1fr}}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}
+input,select,textarea{width:100%;font:inherit;padding:12px;border:1px solid #cbd3da;border-radius:10px;background:#fff}
+input[readonly]{background:#eef2f5;font-weight:700}
+button{width:100%;border:0;border-radius:11px;padding:13px 12px;font-size:15px;font-weight:800;cursor:pointer;background:var(--accent);color:#fff}
+button.secondary{background:#e9eef2;color:#17212b}.fuel{border-left:6px solid #7c8b97}.fuel h3{margin:0 0 10px}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.metric{padding:10px;background:#f5f7f9;border-radius:10px;text-align:center}
+.metric b{display:block;font-size:18px}.metric span{font-size:11px;color:var(--muted)}
+.hidden{display:none}.status{font-size:13px;padding:10px;border-radius:10px;background:#eef6f1;color:var(--ok);margin-top:10px}
+.photo{max-width:100%;max-height:240px;border-radius:10px;margin-top:8px;display:none}
+nav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);z-index:6}
+nav button{border-radius:0;background:#fff;color:#34424f;font-size:12px;padding:11px 4px} nav button.active{color:var(--accent);background:#edf2f6}
+small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:#fafbfc}.tx b{display:block}.tx small{display:block;margin-top:3px}.mini{width:auto;padding:7px 10px;font-size:12px;margin-top:7px;background:#9f2d2d} table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left}
+.total{font-size:25px;font-weight:900}.danger{background:#9f2d2d}
+</style>
+</head>
+<body>
+<div id="authScreen" class="auth-wrap">
+ <div class="auth-card">
+  <span class="badge">PRIVATE PROTOTYPE</span>
+  <h1>Fuel Daily Sales System</h1>
+  <p>Online V4.7 • Main Cashier / Bookkeeper</p>
+  <div class="viewer-note">This prototype does not connect to the cloud yet. The role selector below is only for testing the interface. Real access will later use individual authenticated accounts and database-level permissions.</div>
+  <div style="height:14px"></div>
+  <label>Your Name</label><input id="demoName" placeholder="Authorized user">
+  <div style="height:10px"></div>
+  <label>Test Role</label>
+  <select id="demoRole">
+    <option value="admin">Admin</option>
+    <option value="bookkeeper">Main Cashier / Bookkeeper</option>
+    <option value="personnel">Store Cashier / Personnel</option>
+    <option value="viewer">Family Viewer</option>
+  </select>
+  <div style="height:10px"></div>
+  <label>Assigned Store</label>
+  <select id="demoStore">
+    <option value="store1">Store 1 - Main</option>
+    <option value="store2">Store 2</option>
+    <option value="store3">Store 3</option>
+    <option value="store4">Store 4</option>
+    <option value="store5">Store 5</option>
+  </select>
+  <div style="height:14px"></div><button onclick="demoSignIn()">Enter Prototype</button>
+ </div>
+</div>
+<div id="appShell" class="hidden">
+<header><div class="topbar"><div><h1>Fuel Daily Sales System</h1><p>Online V4.7 • Cash Remittance & Bookkeeping</p></div><div class="who"><span id="roleBadge"></span> • <span id="userBadge"></span> <button onclick="demoSignOut()">Sign Out</button></div></div></header>
+<div class="storebar"><div class="inner"><select id="activeStore" onchange="changeStore()"></select><span id="accessLabel"></span></div></div>
+<main>
+<section id="dashboard">
+<div class="card"><div class="topbar"><div><b>ACTIVE STORE</b><div id="dashStoreName" style="font-size:20px;font-weight:900;margin-top:4px">Store 1 - Main</div></div><span class="badge" id="storeDataBadge">SEPARATE DATA</span></div><p class="muted">Sales, inventory, purchases, payables and history shown below belong only to this store.</p>
+<div id="priceStatusLine" class="viewer-note" style="margin-top:10px">Selling prices carry forward until Admin changes them.</div>
+<div style="margin-top:12px"><b>Current Selling Price / Liter</b>
+<div class="metrics" style="margin-top:8px">
+ <div class="metric"><b id="priceRegularView">₱0.00</b><span>REGULAR</span></div>
+ <div class="metric"><b id="pricePremiumView">₱0.00</b><span>PREMIUM</span></div>
+ <div class="metric"><b id="priceDieselView">₱0.00</b><span>DIESEL</span></div>
+</div></div></div>
+ <div class="card">
+  <h2>Today's Summary</h2>
+  <div class="total" id="grandTotal">₱0.00</div><small>Total calculated sales</small>
+  <div class="row3" style="margin-top:12px">
+   <div class="metric"><b id="rDash">₱0</b><span>REGULAR</span></div>
+   <div class="metric"><b id="pDash">₱0</b><span>PREMIUM</span></div>
+   <div class="metric"><b id="dDash">₱0</b><span>DIESEL</span></div>
+  </div>
+ </div>
+ <div class="card"><h2>Daily Flow</h2><p>1. Record opening totalizers.<br>2. At closing, photograph each dispenser and enter closing readings.<br>3. The app calculates pesos and liters sold.<br>4. Review and close the day.</p>
+ <button id="dashboardAction" onclick="showPage('record')">Start / Continue Today's Record</button></div>
+</section>
+
+<section id="record" class="hidden">
+<div class="card" id="priceVerificationCard">
+ <h2>Dispenser Price Change Verification</h2>
+ <p class="muted">Admin changed the official selling price. Personnel should confirm that the physical dispenser has been changed to the same price.</p>
+ <div class="grid">
+  <div><label>Regular — Actual Dispenser Price</label><input id="dispPriceRegular" type="number" min="0" step="0.01" oninput="verifyDispenserPrices()"><div id="dispCheckRegular" class="muted">Not yet verified</div></div>
+  <div><label>Premium — Actual Dispenser Price</label><input id="dispPricePremium" type="number" min="0" step="0.01" oninput="verifyDispenserPrices()"><div id="dispCheckPremium" class="muted">Not yet verified</div></div>
+  <div><label>Diesel — Actual Dispenser Price</label><input id="dispPriceDiesel" type="number" min="0" step="0.01" oninput="verifyDispenserPrices()"><div id="dispCheckDiesel" class="muted">Not yet verified</div></div>
+ </div>
+ <div id="dispOverall" style="margin-top:12px;padding:12px;border-radius:10px;background:#f4f6f8;font-weight:800">Enter the three dispenser prices to verify.</div>
+ <button class="secondary" onclick="saveDispenserVerification()">Save Opening Price Verification</button>
+ <div id="dispVerifySaved" class="muted" style="margin-top:8px"></div>
+</div>
+ <div class="card"><h2>Daily Record</h2><div class="grid"><div><label>Date</label><input type="date" id="date" readonly><small id="dateHelp" class="muted">Date is set automatically. Only Admin can correct it manually.</small></div><div><label>Recorder / User</label><input id="user" placeholder="Name"></div></div></div>
+ <div id="fuelCards"></div>
+ <div class="card">
+  <h2>Fuel Deliveries & Inventory</h2>
+  <p><small>Fuel purchases are recorded separately from ordinary expenses because they affect both cash and fuel inventory.</small></p>
+  <div class="grid">
+   <div><label>Fuel Type</label><select id="deliveryFuel"><option>Regular</option><option>Premium</option><option>Diesel</option></select></div>
+   <div><label>Supplier</label><input id="deliverySupplier" list="supplierOptions" value="FUEL CENTRAL" placeholder="Select or enter supplier"><datalist id="supplierOptions"><option value="FUEL CENTRAL"></option></datalist><small class="muted">FUEL CENTRAL is the default. Other supplier names entered here are remembered for 24 hours.</small></div>
+   <div><label>Liters Delivered</label><input id="deliveryLiters" type="number" step="0.01" inputmode="decimal"></div>
+   <div><label>Cost per Liter (₱)</label><input id="deliveryCost" type="number" step="0.01" inputmode="decimal"></div>
+   <div><label>Payment Status / Method</label><select id="deliveryPayment"><option>Paid - Cash</option><option>Paid - GCash/Bank</option><option>Supplier Credit / Payable</option></select></div>
+   <div><label>Receipt / Reference</label><input id="deliveryRef" placeholder="Optional reference"></div>
+   <div><label>Receipt Photo</label><input id="deliveryPhoto" type="file" accept="image/*" capture="environment"></div>
+  </div>
+  <div style="margin-top:10px"><button onclick="addDelivery()">Add Fuel Delivery</button></div>
+  <div id="deliveryList"></div>
+  <div class="row3" style="margin-top:12px">
+   <div class="metric"><b id="fuelPurchaseTotal">₱0.00</b><span>FUEL PURCHASES</span></div>
+   <div class="metric"><b id="fuelCashPaid">₱0.00</b><span>PAID BY CASH</span></div>
+   <div class="metric"><b id="fuelPayable">₱0.00</b><span>SUPPLIER PAYABLE</span></div>
+  </div>
+  <div style="margin-top:8px" class="metric"><b id="fuelDigitalPaid">₱0.00</b><span>PAID BY GCASH / BANK</span></div>
+  <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+  <h3 style="margin:0 0 10px">Inventory Reconciliation</h3>
+  <div id="inventoryRows"></div>
+ </div>
+ <div class="card">
+  <h2>Supplier Payables</h2>
+  <p><small>Credit fuel purchases appear here. Record later payments without creating another fuel purchase or changing inventory.</small></p>
+  <div id="payablesList"><small>No supplier payables.</small></div>
+  <div id="payablePaymentBox" class="hidden" style="margin-top:14px">
+   <h3 style="margin:0 0 10px">Record Supplier Payment</h3>
+   <input type="hidden" id="payableIndex">
+   <div class="grid">
+    <div><label>Supplier</label><input id="paySupplier" readonly></div>
+    <div><label>Outstanding Balance</label><input id="payOutstanding" readonly></div>
+    <div><label>Amount to Pay (₱)</label><input id="payAmount" type="number" step="0.01" inputmode="decimal"></div>
+    <div><label>Payment Method</label><select id="payMethod"><option>Cash</option><option>GCash/Bank</option></select></div>
+    <div><label>Reference / Note</label><input id="payReference" placeholder="Optional"></div>
+   </div>
+   <div style="margin-top:10px"><button onclick="saveSupplierPayment()">Save Supplier Payment</button></div>
+  </div>
+  <div class="row3" style="margin-top:12px">
+   <div class="metric"><b id="totalPayableBalance">₱0.00</b><span>OUTSTANDING</span></div>
+   <div class="metric"><b id="supplierCashPaidToday">₱0.00</b><span>CASH PAID</span></div>
+   <div class="metric"><b id="supplierDigitalPaidToday">₱0.00</b><span>GCASH/BANK PAID</span></div>
+  </div>
+ </div>
+ <div class="card">
+  <h2>Itemized Cash Out / Withdrawals</h2>
+  <div class="grid">
+   <div><label>Type</label><select id="txType"><option>Operating Expense</option><option>Cash Withdrawal</option><option>Other Cash Out</option></select></div>
+   <div><label>Category</label><input id="txCategory" placeholder="e.g. Electricity, Repair"></div>
+   <div><label>Amount (₱)</label><input id="txAmount" type="number" step="0.01" inputmode="decimal"></div>
+   <div><label>Description</label><input id="txDesc" placeholder="Purpose / details"></div>
+   <div><label>Receipt Photo</label><input id="txPhoto" type="file" accept="image/*" capture="environment"></div>
+  </div>
+  <div style="margin-top:10px"><button onclick="addTransaction()">Add Cash-Out Transaction</button></div>
+  <div id="transactionList"></div>
+  <p><small>The totals below automatically feed into cash reconciliation.</small></p>
+ </div>
+ <div class="card">
+  <h2>Payments & Cash Reconciliation</h2>
+  <div class="grid">
+   <div><label>Cash Sales (₱)</label><input id="cashSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>GCash / E-wallet (₱)</label><input id="gcashSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>Credit / Utang Sales (₱)</label><input id="creditSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>Other Payments (₱)</label><input id="otherSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+  </div>
+  <div style="margin-top:12px" class="row3">
+   <div class="metric"><b id="paymentsTotal">₱0.00</b><span>TOTAL PAYMENTS</span></div>
+   <div class="metric"><b id="dispenserTotal">₱0.00</b><span>DISPENSER SALES</span></div>
+   <div class="metric"><b id="salesDiff">₱0.00</b><span>DIFFERENCE</span></div>
+  </div>
+  <div id="paymentWarning"></div>
+  <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+  <div class="grid">
+   <div><label>Additional Cash In (₱)</label><input id="cashIn" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>Expenses / Cash Out (₱)</label><input id="expenses" type="number" step="0.01" inputmode="decimal" readonly></div>
+   <div><label>Cash Withdrawal (₱)</label><input id="withdrawal" type="number" step="0.01" inputmode="decimal" readonly></div>
+   <div><label>Actual Cash Count (₱)</label><input id="actualCash" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+  </div>
+  <div class="grid" style="margin-top:12px">
+   <div><label>Expected Cash (after fuel & supplier cash payments)</label><input id="expectedCash" readonly></div>
+   <div><label>Cash Over / Short</label><input id="cashVariance" readonly></div>
+  </div>
+  <div style="margin-top:10px"><label>Remarks / Explanation</label><textarea id="remarks" rows="3" placeholder="Explain any payment or cash discrepancy"></textarea></div>
+ </div>
+ <div class="card">
+  <h2>Daily Total</h2>
+  <div class="row3"><div class="metric"><b id="totalAmount">₱0.00</b><span>SALES</span></div><div class="metric"><b id="totalLiters">0.00 L</b><span>LITERS SOLD</span></div><div class="metric"><b id="photoCount">0/3</b><span>PHOTOS</span></div></div>
+  <div style="height:10px"></div><button onclick="saveDraft()">Save Draft</button>
+  <div style="height:8px"></div><button class="danger" onclick="closeDay()">Close & Lock Day</button>
+  <div id="saveStatus"></div>
+ </div>
+</section>
+
+<section id="bookkeeper" class="hidden">
+ <div class="card"><h2>Main Cashier / Bookkeeper</h2><div class="viewer-note">Central cash custody and reconciliation. Confirm what was actually received from each store; confirmed receipts are kept in the cashbook.</div>
+ <div class="admin-grid" style="margin-top:12px"><div class="metric"><b id="bkExpected">₱0.00</b><span>EXPECTED REMITTANCE</span></div><div class="metric"><b id="bkReceived">₱0.00</b><span>RECEIVED TODAY</span></div><div class="metric"><b id="bkUnremitted">₱0.00</b><span>UNREMITTED</span></div><div class="metric"><b id="bkVariance">₱0.00</b><span>SHORT / OVER</span></div><div class="metric"><b id="bkCashOnHand">₱0.00</b><span>CASH ON HAND</span></div></div></div>
+ <div class="card"><h2>Confirm Store Cash Remittance</h2><div class="grid">
+ <div><label>Date</label><input id="remitDate" type="date" readonly></div><div><label>Store</label><select id="remitStore"></select></div>
+ <div><label>Remitting Cashier</label><input id="remitCashier" placeholder="Cashier / personnel name"></div><div><label>Expected Amount (₱)</label><input id="remitExpected" type="number" step="0.01"></div>
+ <div><label>Actual Cash Received (₱)</label><input id="remitActual" type="number" step="0.01"></div><div><label>Reference / Note</label><input id="remitNote" placeholder="Optional reference or explanation"></div></div>
+ <button style="margin-top:10px" onclick="confirmRemittance()">Confirm Cash Received</button><div id="remitStatus"></div></div>
+ <div class="card"><h2>Central Cashbook</h2><div class="grid"><div><label>Other Cash In (₱)</label><input id="bkOtherIn" type="number" step="0.01"></div><div><label>Cash Out / Expense (₱)</label><input id="bkCashOut" type="number" step="0.01"></div><div><label>Description</label><input id="bkDesc" placeholder="Purpose / source"></div><div><label>Type</label><select id="bkType"><option>Other Cash In</option><option>Expense / Cash Out</option><option>Withdrawal</option><option>Borrowed Cash In</option><option>Payable Collection</option></select></div></div><button style="margin-top:10px" onclick="addCashbookEntry()">Add Cashbook Entry</button><div id="cashbookList"></div></div>
+ <div class="card"><h2>Remittance History</h2><div id="remittanceList"></div></div>
+</section>
+
+<section id="admin" class="hidden">
+ <div class="card">
+  <h2>Admin Control Center</h2>
+  <div class="viewer-note">Prototype only. User accounts and permissions will be enforced in the online database later.</div>
+  <div class="admin-grid" style="margin-top:12px">
+   <div class="metric"><b>5</b><span>STORE CAPACITY PREPARED</span></div>
+   <div class="metric"><b>4</b><span>ACCESS ROLES</span></div>
+   <div class="metric"><b>ALL</b><span>ADMIN STORE ACCESS</span></div>
+   <div class="metric"><b>READ ONLY</b><span>FAMILY VIEWER</span></div>
+  </div>
+ </div>
+ <div class="card"><h2>Selling Price Management</h2>
+<p class="muted">Only Admin can change these prices. Prices are saved separately for each store.</p>
+<div class="grid">
+ <div><label>Regular Price / Liter</label><input id="adminPriceRegular" type="number" min="0" step="0.01"></div>
+ <div><label>Premium Price / Liter</label><input id="adminPricePremium" type="number" min="0" step="0.01"></div>
+ <div><label>Diesel Price / Liter</label><input id="adminPriceDiesel" type="number" min="0" step="0.01"></div>
+</div>
+<button onclick="saveStorePrices()">Update Selling Prices</button>
+<div id="priceSavedMsg" class="muted" style="margin-top:8px"></div>
+</div>
+<div class="card"><h2>Store Overview</h2><div id="adminStoreOverview"></div><button class="secondary" onclick="renderAdminOverview()">Refresh Store Overview</button></div>
+<div class="card" style="border:2px solid #9f2d2d">
+ <h2>Start Actual Use / Clear Test Data</h2>
+ <p class="muted">Admin-only control for clearing prototype/test transactions before the system begins actual operation. Current Admin selling prices are preserved.</p>
+ <div style="padding:12px;border-radius:10px;background:#fff1f0;color:#8a1f1f;margin:10px 0">
+  <b>Warning:</b> This permanently clears test drafts, closed-day history, remittances, central cashbook entries, temporary supplier names, price-verification records, and test audit records on this device. It cannot be undone unless you exported a backup first.
+ </div>
+ <button class="secondary" onclick="exportData()">Export Backup Before Clearing</button>
+ <div style="height:8px"></div>
+ <button class="danger" onclick="clearTestDataForActualUse()">Clear Test Data & Start Actual Use</button>
+ <div id="clearDataStatus" class="muted" style="margin-top:8px"></div>
+</div>
+<div class="card"><h2>Planned User Assignment</h2>
+  <p><b>Admin:</b> all stores and management.</p>
+  <p><b>Main Cashier / Bookkeeper:</b> all-store financial visibility, cash remittance confirmation, central cashbook and bookkeeping.</p>
+  <p><b>Store Cashier / Personnel:</b> assigned store only.</p>
+  <p><b>Family Viewer:</b> monitoring only; no add, edit, delete or close-day controls.</p>
+ </div>
+</section>
+
+<section id="history" class="hidden"><div class="card"><h2>Daily History</h2><div id="historyList"><small>No closed records yet.</small></div></div></section>
+<section id="settings" class="hidden"><div class="card"><h2>Prototype Status</h2><p>This V4.8 final structure preserves the V3.2 sales, cash, inventory and supplier-payable calculations while adding a test interface for multiple stores and four access roles.</p><p><b>Not yet cloud-connected:</b> the role selector is only a simulation. Production access will use individual authenticated accounts, private photo storage, Row Level Security, live synchronization and an audit trail.</p><button class="secondary" onclick="exportData()">Export Local Test Backup (JSON)</button></div></section>
+</main>
+
+<nav id="mainNav" style="grid-template-columns:repeat(6,1fr)">
+<button id="n-dashboard" class="active" onclick="showPage('dashboard')">Dashboard</button>
+<button id="n-record" onclick="showPage('record')">Record</button>
+<button id="n-history" onclick="showPage('history')">History</button>
+<button id="n-bookkeeper" class="hidden" onclick="showPage('bookkeeper')">Main Cashier</button>
+<button id="n-admin" class="hidden" onclick="showPage('admin')">Admin</button>
+<button id="n-settings" onclick="showPage('settings')">Settings</button>
+</nav>
+</div>
+
+<script>
+
+function storeKey(base){
+ const sid=(typeof currentStore!=='undefined' && currentStore)?currentStore:'store1';
+ return base+'__'+sid;
+}
+const prototypeStores=[
+ {id:'store1',name:'Store 1 - Main'},
+ {id:'store2',name:'Store 2'},
+ {id:'store3',name:'Store 3'},
+ {id:'store4',name:'Store 4'},
+ {id:'store5',name:'Store 5'}
+];
+let currentRole='', currentStore='', currentUser='';
+
+
+
+
+function dispenserVerifyKey(){
+ const dateEl=document.getElementById('date');
+ const day=(dateEl&&dateEl.value)?dateEl.value:new Date().toISOString().slice(0,10);
+ return 'fuelDispenserVerify__'+currentStore+'__'+day;
+}
+function verifyDispenserPrices(){
+ const official=getStorePrices();
+ const actual={
+  regular:Number(document.getElementById('dispPriceRegular')?.value||0),
+  premium:Number(document.getElementById('dispPricePremium')?.value||0),
+  diesel:Number(document.getElementById('dispPriceDiesel')?.value||0)
+ };
+ const pairs=[['regular','dispCheckRegular'],['premium','dispCheckPremium'],['diesel','dispCheckDiesel']];
+ let complete=true, allMatch=true, adminPricesSet=true;
+ pairs.forEach(([fuel,id])=>{
+  const el=document.getElementById(id); if(!el)return;
+  const adminPrice=Number(official[fuel]||0);
+  if(adminPrice<=0){
+    el.textContent='ADMIN PRICE NOT YET SET';
+    el.style.color='#9a6700';
+    adminPricesSet=false; allMatch=false;
+    return;
+  }
+  if(!actual[fuel]){
+    el.textContent='Not yet verified';
+    el.style.color='';
+    complete=false; allMatch=false;
+    return;
+  }
+  const diff=Math.abs(actual[fuel]-adminPrice);
+  if(diff<0.005){el.textContent='MATCH — Admin price '+moneyPrice(adminPrice);el.style.color='var(--ok)';}
+  else {el.textContent='MISMATCH — Admin price '+moneyPrice(adminPrice);el.style.color='#b42318';allMatch=false;}
+ });
+ const overall=document.getElementById('dispOverall'); if(!overall)return;
+ if(!adminPricesSet){
+   overall.textContent='⚠ ADMIN SELLING PRICE NOT YET SET — Ask Admin to set the official selling price before dispenser price verification.';
+   overall.style.background='#fff8e6';overall.style.color='#9a6700';
+  } else if(!complete){
+   overall.textContent='Enter the three actual dispenser prices to verify against the Admin prices.';
+   overall.style.background='#f4f6f8';overall.style.color='';
+  } else if(allMatch){
+   overall.textContent='✓ ALL DISPENSER PRICES MATCH THE ADMIN SELLING PRICES';overall.style.background='#eef6f1';overall.style.color='var(--ok)';
+  } else {
+   overall.textContent='⚠ PRICE MISMATCH — CORRECT THE PHYSICAL DISPENSER PRICE BEFORE SELLING. If sales already occurred, keep the actual price recorded for reconciliation.';overall.style.background='#fff1f0';overall.style.color='#b42318';
+  }
+ return {official,actual,complete,allMatch,adminPricesSet};
+}
+function saveDispenserVerification(){
+ if(currentRole==='viewer'){alert('Viewer access is read-only.');return;}
+ const v=verifyDispenserPrices();
+ if(!v){return;}
+ if(!v.adminPricesSet){alert('Admin must set the official selling prices first.');return;}
+ if(!v.complete){alert('Please enter the actual displayed price for all three dispensers.');return;}
+ const rec={at:new Date().toISOString(),user:currentUser,store:currentStore,official:v.official,actual:v.actual,matched:v.allMatch};
+ localStorage.setItem(dispenserVerifyKey(),JSON.stringify(rec));
+ if(v.allMatch)setPriceVerificationRequired(false);
+ updatePriceVerificationVisibility();
+ const msg=document.getElementById('dispVerifySaved');
+ if(msg)msg.textContent=v.allMatch?'Opening dispenser prices verified and saved.':'Mismatch saved for review/reconciliation. Correct the dispenser price immediately.';
+}
+function loadDispenserVerification(){
+ updatePriceVerificationVisibility();
+ if(!isPriceVerificationRequired())return;
+
+ let rec=JSON.parse(localStorage.getItem(dispenserVerifyKey())||'null');
+ const official=getStorePrices();
+ const adminPricesSet=['regular','premium','diesel'].every(f=>Number(official[f]||0)>0);
+
+ // Clean opening: if Admin prices are not configured, no old physical-dispenser
+ // values or verification status should be shown.
+ if(!adminPricesSet){
+   localStorage.removeItem(dispenserVerifyKey());
+   rec=null;
+   ['regular','premium','diesel'].forEach(f=>{
+     const id='dispPrice'+f.charAt(0).toUpperCase()+f.slice(1);
+     const el=document.getElementById(id); if(el)el.value='';
+   });
+   verifyDispenserPrices();
+   const msg=document.getElementById('dispVerifySaved'); if(msg)msg.textContent='';
+   return;
+ }
+
+ ['regular','premium','diesel'].forEach(f=>{
+  const id='dispPrice'+f.charAt(0).toUpperCase()+f.slice(1);
+  const el=document.getElementById(id); if(el)el.value=rec?.actual?.[f]||'';
+ });
+ const v=verifyDispenserPrices();
+ const msg=document.getElementById('dispVerifySaved');
+ if(!msg)return;
+ if(!v || !v.adminPricesSet){
+   msg.textContent='';
+   return;
+ }
+ if(!rec){
+   msg.textContent='';
+   return;
+ }
+ const sameOfficial=['regular','premium','diesel'].every(f=>
+   Math.abs(Number(rec.official?.[f]||0)-Number(v.official?.[f]||0))<0.005
+ );
+ if(!sameOfficial){
+   localStorage.removeItem(dispenserVerifyKey());
+   ['dispPriceRegular','dispPricePremium','dispPriceDiesel'].forEach(id=>{
+     const el=document.getElementById(id); if(el)el.value='';
+   });
+   msg.textContent='Official selling price has changed. Enter the physical dispenser prices again for a fresh verification.';
+   verifyDispenserPrices();
+   return;
+ }
+ msg.textContent=rec.matched?'Saved verification: prices matched.':'Saved verification: mismatch recorded.';
+}
+
+function priceKey(){return 'fuelSellingPrices__'+currentStore;}
+function getStorePrices(){
+ return JSON.parse(localStorage.getItem(priceKey())||'{"regular":0,"premium":0,"diesel":0}');
+}
+function moneyPrice(v){return '₱'+Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
+function renderStorePrices(){
+ const p=getStorePrices();
+ const r=document.getElementById('priceRegularView'), pr=document.getElementById('pricePremiumView'), d=document.getElementById('priceDieselView');
+ if(r)r.textContent=moneyPrice(p.regular); if(pr)pr.textContent=moneyPrice(p.premium); if(d)d.textContent=moneyPrice(p.diesel);
+ updatePriceVerificationVisibility();
+ const ar=document.getElementById('adminPriceRegular'), ap=document.getElementById('adminPricePremium'), ad=document.getElementById('adminPriceDiesel');
+ if(ar)ar.value=p.regular||''; if(ap)ap.value=p.premium||''; if(ad)ad.value=p.diesel||'';
+}
+
+function priceVerificationRequiredKey(){return 'fuelPriceVerificationRequired__'+currentStore;}
+function isPriceVerificationRequired(){return localStorage.getItem(priceVerificationRequiredKey())==='1';}
+function setPriceVerificationRequired(v){if(v)localStorage.setItem(priceVerificationRequiredKey(),'1');else localStorage.removeItem(priceVerificationRequiredKey());}
+function updatePriceVerificationVisibility(){
+ const card=document.getElementById('priceVerificationCard');
+ const p=getStorePrices(), configured=['regular','premium','diesel'].every(f=>Number(p[f]||0)>0);
+ const required=configured && isPriceVerificationRequired();
+ if(card)card.classList.toggle('hidden',!required);
+ const line=document.getElementById('priceStatusLine');
+ if(line)line.textContent=!configured?'Admin should set the initial selling prices. Once set, they carry forward until changed.':required?'PRICE CHANGED — physical dispenser verification is required.':'Current selling prices carry forward automatically until Admin changes them.';
+}
+function saveStorePrices(){
+ if(currentRole!=='admin'){alert('Only Admin can change selling prices.');return;}
+ const old=getStorePrices();
+ const p={
+  regular:Number(document.getElementById('adminPriceRegular').value||0),
+  premium:Number(document.getElementById('adminPricePremium').value||0),
+  diesel:Number(document.getElementById('adminPriceDiesel').value||0)
+ };
+ if(Object.values(p).some(v=>v<0)){alert('Selling price cannot be negative.');return;}
+ const changed=['regular','premium','diesel'].some(f=>Math.abs(Number(old[f]||0)-Number(p[f]||0))>=0.005);
+ localStorage.setItem(priceKey(),JSON.stringify(p));
+ if(changed){localStorage.removeItem(dispenserVerifyKey());setPriceVerificationRequired(true);}
+ // Any earlier opening verification for today used an older official price.
+ // Remove it so Personnel must perform a fresh physical-dispenser check.
+ localStorage.removeItem(dispenserVerifyKey());
+ ['dispPriceRegular','dispPricePremium','dispPriceDiesel'].forEach(id=>{
+   const el=document.getElementById(id); if(el)el.value='';
+ });
+ const verifyMsg=document.getElementById('dispVerifySaved'); if(verifyMsg)verifyMsg.textContent='';
+ const auditKey='fuelPriceAudit__'+currentStore;
+ const audit=JSON.parse(localStorage.getItem(auditKey)||'[]');
+ audit.unshift({at:new Date().toISOString(),user:currentUser,old:old,new:p});
+ localStorage.setItem(auditKey,JSON.stringify(audit.slice(0,100)));
+ renderStorePrices();
+ loadDispenserVerification();
+ const msg=document.getElementById('priceSavedMsg'); if(msg)msg.textContent='Selling prices updated for '+(prototypeStores.find(x=>x.id===currentStore)?.name||currentStore)+'. Dispenser prices must be verified against these prices.';
+}
+
+
+function clearTestDataForActualUse(){
+ if(currentRole!=='admin'){alert('Only Admin can clear test data.');return;}
+ const first=confirm('ADMIN ONLY — This will permanently clear all TEST transaction data on this device while preserving the current selling prices. Continue?');
+ if(!first)return;
+ const phrase=prompt('For final confirmation, type exactly: START ACTUAL USE');
+ if(phrase!=='START ACTUAL USE'){alert('Clear operation cancelled. Confirmation text did not match.');return;}
+
+ const preservePrefixes=['fuelSellingPrices__'];
+ const removeExact=new Set([
+   'fuelDraft','fuelHistory','fuelRemittancesV47','fuelCentralCashbookV47'
+ ]);
+ const removePrefixes=[
+   'fuelDraftV32__','fuelHistoryV32__','fuelTemporarySuppliers__',
+   'fuelDispenserVerify__','fuelPriceVerificationRequired__','fuelPriceAudit__'
+ ];
+ const keys=[];
+ for(let i=0;i<localStorage.length;i++)keys.push(localStorage.key(i));
+ keys.forEach(k=>{
+   if(!k)return;
+   if(preservePrefixes.some(p=>k.startsWith(p)))return;
+   if(removeExact.has(k)||removePrefixes.some(p=>k.startsWith(p)))localStorage.removeItem(k);
+ });
+
+ deliveries=[]; transactions=[];
+ const ids=['regularOA','regularOL','regularCA','regularCL','premiumOA','premiumOL','premiumCA','premiumCL','dieselOA','dieselOL','dieselCA','dieselCL',
+ 'cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash','remarks',
+ 'regularBeginStock','regularActualStock','premiumBeginStock','premiumActualStock','dieselBeginStock','dieselActualStock'];
+ ids.forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+ setAutomaticDate(true);
+ const u=document.getElementById('user');if(u)u.value=currentUser;
+ const ds=document.getElementById('deliverySupplier');if(ds)ds.value='FUEL CENTRAL';
+ refreshSupplierOptions();
+ renderDeliveries();renderTransactions();syncCashOut();renderHistory();renderBookkeeper();renderAdminOverview();renderStorePrices();calc();
+ const st=document.getElementById('clearDataStatus');
+ if(st)st.innerHTML='<div class="status">Test data cleared. The system is ready for fresh actual-use entries. Current Admin selling prices were preserved.</div>';
+ alert('Test data cleared successfully. The system is now ready for actual use.');
+}
+
+function renderAdminOverview(){
+ const box=document.getElementById('adminStoreOverview'); if(!box)return;
+ box.innerHTML=prototypeStores.map(s=>{
+   const h=JSON.parse(localStorage.getItem('fuelHistoryV32__'+s.id)||'[]');
+   const d=JSON.parse(localStorage.getItem('fuelDraftV32__'+s.id)||'null');
+   return `<div style="padding:10px 0;border-bottom:1px solid #dde3e8"><b>${s.name}</b><br><span class="muted">${h.length} closed day(s) • ${d?'Draft available':'No current draft'}</span></div>`;
+ }).join('');
+}
+
+function demoSignIn(){
+ currentRole=document.getElementById('demoRole').value;
+ currentStore=document.getElementById('demoStore').value;
+ currentUser=document.getElementById('demoName').value.trim()||'Authorized User';
+ sessionStorage.setItem('fuelProtoSession',JSON.stringify({role:currentRole,store:currentStore,user:currentUser}));
+ applyPrototypeAccess();
+}
+function applyPrototypeAccess(){
+ document.getElementById('authScreen').classList.add('hidden');
+ document.getElementById('appShell').classList.remove('hidden');
+ document.getElementById('roleBadge').textContent=currentRole==='admin'?'ADMIN':currentRole==='bookkeeper'?'MAIN CASHIER / BOOKKEEPER':currentRole==='personnel'?'STORE CASHIER / PERSONNEL':'FAMILY VIEWER';
+ document.getElementById('userBadge').textContent=currentUser;
+ const s=document.getElementById('activeStore');
+ const allowed=currentRole==='admin'||currentRole==='bookkeeper'||currentRole==='viewer'?prototypeStores:prototypeStores.filter(x=>x.id===currentStore);
+ s.innerHTML=allowed.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+ s.value=currentStore && allowed.some(x=>x.id===currentStore)?currentStore:allowed[0].id;
+ currentStore=s.value;
+ document.getElementById('accessLabel').textContent=currentRole==='admin'?'All-store administration':currentRole==='bookkeeper'?'All-store financial access':currentRole==='viewer'?'Read-only monitoring':'Assigned store only';
+ document.getElementById('n-admin').classList.toggle('hidden',currentRole!=='admin');
+ document.getElementById('n-bookkeeper').classList.toggle('hidden',!(currentRole==='bookkeeper'||currentRole==='admin'));
+ document.getElementById('n-record').classList.toggle('hidden',currentRole==='viewer'||currentRole==='bookkeeper');
+ document.querySelectorAll('#record input,#record select,#record textarea,#record button').forEach(el=>el.disabled=currentRole==='viewer'||currentRole==='bookkeeper');
+ document.getElementById('user').value=currentUser;
+ configureDateAccess();
+ refreshSupplierOptions();
+ document.getElementById('dashStoreName').textContent=prototypeStores.find(x=>x.id===currentStore)?.name||currentStore;
+ loadDraft();
+ renderHistory();
+ renderStorePrices();
+ const a=document.getElementById('dashboardAction');
+ if(currentRole==='viewer'){a.textContent='View Daily History';a.onclick=()=>showPage('history');}
+ else {a.textContent="Start / Continue Today's Record";a.onclick=()=>showPage('record');}
+ showPage('dashboard');
+}
+function demoSignOut(){
+ sessionStorage.removeItem('fuelProtoSession'); location.reload();
+}
+function changeStore(){
+ const next=document.getElementById('activeStore').value;
+ currentStore=next;
+ const ses={role:currentRole,store:currentStore,user:currentUser};sessionStorage.setItem('fuelProtoSession',JSON.stringify(ses));
+ document.getElementById('dashStoreName').textContent=prototypeStores.find(x=>x.id===currentStore)?.name||currentStore;
+ loadDraft();
+ renderHistory();
+ renderStorePrices();
+ loadDispenserVerification();
+ calc();
+ showPage('dashboard');
+}
+(function restorePrototypeSession(){
+ const s=JSON.parse(sessionStorage.getItem('fuelProtoSession')||'null');
+ if(s){currentRole=s.role;currentStore=s.store;currentUser=s.user;setTimeout(applyPrototypeAccess,0);}
+})();
+
+const fuels=[['regular','Regular'],['premium','Premium'],['diesel','Diesel']];
+const peso=n=>'₱'+Number(n||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+function localDateISO(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`;}
+function setAutomaticDate(force=false){const el=document.getElementById('date');if(!el)return;const today=localDateISO();if(force||!el.value)el.value=today;}
+function configureDateAccess(){const el=document.getElementById('date');if(!el)return;el.readOnly=currentRole!=='admin';const help=document.getElementById('dateHelp');if(help)help.textContent=currentRole==='admin'?'Date is automatic. Admin may correct it when necessary.':'Date is automatic and cannot be changed by this user.';}
+setAutomaticDate(true);
+
+function fuelHTML(k,n){return `<div class="card fuel"><h3>${n}</h3>
+<div class="grid"><div><label>Opening Amount Totalizer (₱)</label><input inputmode="decimal" id="${k}OA" type="number" step="0.01" oninput="calc()"></div>
+<div><label>Opening Liter Totalizer (L)</label><input inputmode="decimal" id="${k}OL" type="number" step="0.01" oninput="calc()"></div>
+<div><label>Closing Amount Totalizer (₱)</label><input inputmode="decimal" id="${k}CA" type="number" step="0.01" oninput="calc()"></div>
+<div><label>Closing Liter Totalizer (L)</label><input inputmode="decimal" id="${k}CL" type="number" step="0.01" oninput="calc()"></div></div>
+<div class="grid" style="margin-top:10px"><div><label>Calculated Sales</label><input id="${k}Sales" readonly></div><div><label>Calculated Liters Sold</label><input id="${k}Liters" readonly></div></div>
+<div style="margin-top:10px"><label>Closing Dispenser Photo</label><input id="${k}Photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto('${k}',this)"><img class="photo" id="${k}Preview"></div></div>`}
+document.getElementById('fuelCards').innerHTML=fuels.map(x=>fuelHTML(...x)).join('');
+document.getElementById('inventoryRows').innerHTML=fuels.map(([k,n])=>`<div class="card" style="box-shadow:none;margin-bottom:8px"><b>${n}</b><div class="grid" style="margin-top:8px"><div><label>Beginning Stock (L)</label><input id="${k}BeginStock" type="number" step="0.01" inputmode="decimal" oninput="inventoryCalc()"></div><div><label>Actual Ending Stock (L)</label><input id="${k}ActualStock" type="number" step="0.01" inputmode="decimal" oninput="inventoryCalc()"></div><div><label>Expected Ending Stock</label><input id="${k}ExpectedStock" readonly></div><div><label>Inventory Variance</label><input id="${k}StockVariance" readonly></div></div></div>`).join('');
+let deliveries=[], transactions=[];
+
+
+function val(id){return Number(document.getElementById(id).value||0)}
+function calc(){
+ let ta=0,tl=0;
+ fuels.forEach(([k])=>{
+  let a=Math.max(0,val(k+'CA')-val(k+'OA')), l=Math.max(0,val(k+'CL')-val(k+'OL'));
+  document.getElementById(k+'Sales').value=peso(a); document.getElementById(k+'Liters').value=l.toFixed(2)+' L'; ta+=a;tl+=l;
+ });
+ document.getElementById('totalAmount').textContent=peso(ta);document.getElementById('totalLiters').textContent=tl.toFixed(2)+' L';
+ document.getElementById('grandTotal').textContent=peso(ta);
+ document.getElementById('rDash').textContent=peso(Math.max(0,val('regularCA')-val('regularOA')));
+ document.getElementById('pDash').textContent=peso(Math.max(0,val('premiumCA')-val('premiumOA')));
+ document.getElementById('dDash').textContent=peso(Math.max(0,val('dieselCA')-val('dieselOA')));
+ reconcile();
+ inventoryCalc();
+}
+function salesTotal(){
+ return fuels.reduce((sum,[k])=>sum+Math.max(0,val(k+'CA')-val(k+'OA')),0);
+}
+function reconcile(){
+ const disp=salesTotal();
+ const payments=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales');
+ const diff=payments-disp;
+ const fuelCash=deliveries.filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
+ const supplierCash=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
+ const expected=val('cashSales')+val('cashIn')-val('expenses')-val('withdrawal')-fuelCash-supplierCash;
+ const variance=val('actualCash')-expected;
+ document.getElementById('paymentsTotal').textContent=peso(payments);
+ document.getElementById('dispenserTotal').textContent=peso(disp);
+ document.getElementById('salesDiff').textContent=(diff>0?'+':'')+peso(diff);
+ document.getElementById('expectedCash').value=peso(expected);
+ document.getElementById('cashVariance').value=(variance>0?'+':'')+peso(variance);
+ const w=document.getElementById('paymentWarning');
+ if(Math.abs(diff)>0.009) w.innerHTML='<div style="font-size:13px;padding:10px;border-radius:10px;background:#fff3e8;color:#9a4b00;margin-top:10px"><b>Check:</b> Payment total does not equal dispenser sales. Difference: '+(diff>0?'+':'')+peso(diff)+'</div>';
+ else if(disp>0) w.innerHTML='<div class="status">Payments reconcile with dispenser sales.</div>';
+ else w.innerHTML='';
+}
+
+const SUPPLIER_TTL_MS=24*60*60*1000;
+function supplierCacheKey(){return 'fuelTemporarySuppliers__'+(currentStore||'store1');}
+function getTemporarySuppliers(){
+ const now=Date.now(); let rows=[]; try{rows=JSON.parse(localStorage.getItem(supplierCacheKey())||'[]')}catch(e){}
+ rows=(Array.isArray(rows)?rows:[]).filter(x=>x&&x.name&&now-Number(x.savedAt||0)<SUPPLIER_TTL_MS);
+ localStorage.setItem(supplierCacheKey(),JSON.stringify(rows)); return rows;
+}
+function rememberSupplier(name){
+ name=(name||'').trim(); if(!name||name.toUpperCase()==='FUEL CENTRAL')return;
+ const rows=getTemporarySuppliers().filter(x=>x.name.toUpperCase()!==name.toUpperCase()); rows.unshift({name,savedAt:Date.now()});
+ localStorage.setItem(supplierCacheKey(),JSON.stringify(rows.slice(0,20))); refreshSupplierOptions();
+}
+function refreshSupplierOptions(){
+ const dl=document.getElementById('supplierOptions'); if(!dl)return;
+ const names=['FUEL CENTRAL',...getTemporarySuppliers().map(x=>x.name)];
+ dl.innerHTML=[...new Set(names)].map(n=>`<option value="${String(n).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"></option>`).join('');
+ const inp=document.getElementById('deliverySupplier'); if(inp&&!inp.value)inp.value='FUEL CENTRAL';
+}
+function addDelivery(){
+ const liters=Number(deliveryLiters.value||0), cost=Number(deliveryCost.value||0);
+ const supplier=(deliverySupplier.value||'FUEL CENTRAL').trim()||'FUEL CENTRAL';
+ if(liters<=0){alert('Enter liters delivered.');return}
+ rememberSupplier(supplier);
+ deliveries.push({id:'D'+Date.now(),fuel:deliveryFuel.value,supplier:supplier,liters,costPerLiter:cost,totalCost:liters*cost,payment:deliveryPayment.value,reference:deliveryRef.value.trim(),photoAttached:deliveryPhoto.files.length>0,time:new Date().toISOString(),supplierPayments:[]});
+ deliverySupplier.value='FUEL CENTRAL';deliveryLiters.value='';deliveryCost.value='';deliveryRef.value='';deliveryPhoto.value='';
+ renderDeliveries();inventoryCalc();
+}
+function renderDeliveries(){
+ const el=document.getElementById('deliveryList');
+ if(!deliveries.length){el.innerHTML='<small>No fuel deliveries recorded for this draft.</small>';updatePurchaseFinance();renderPayables();return}
+ el.innerHTML=deliveries.map((d,i)=>`<div class="tx"><b>${d.fuel}: ${d.liters.toFixed(2)} L — ${peso(d.totalCost)}</b><small>${d.supplier||'Supplier not entered'} • ${d.payment||'Payment method not recorded'}${d.reference?' • Ref: '+d.reference:''}${d.photoAttached?' • Photo attached':''}</small><button class="mini" onclick="removeDelivery(${i})">Remove</button></div>`).join('');
+ updatePurchaseFinance();renderPayables();
+}
+
+function paidOnDelivery(d){return (d.supplierPayments||[]).reduce((a,p)=>a+Number(p.amount||0),0)}
+function payableBalance(d){return d.payment==='Supplier Credit / Payable'?Math.max(0,Number(d.totalCost||0)-paidOnDelivery(d)):0}
+function renderPayables(){
+ const el=document.getElementById('payablesList'); if(!el)return;
+ const credit=deliveries.map((d,i)=>({d,i})).filter(x=>x.d.payment==='Supplier Credit / Payable');
+ if(!credit.length){el.innerHTML='<small>No supplier payables.</small>'}
+ else el.innerHTML=credit.map(({d,i})=>{
+  const paid=paidOnDelivery(d),bal=payableBalance(d),status=bal<0.01?'PAID':paid>0?'PARTIALLY PAID':'UNPAID';
+  return `<div class="tx"><b>${d.supplier||'Unnamed Supplier'} — ${peso(bal)} balance</b><small>${d.fuel} • Original: ${peso(d.totalCost)} • Paid: ${peso(paid)} • ${status}</small>${bal>0.009?`<button style="margin-top:8px" onclick="openSupplierPayment(${i})">Record Payment</button>`:''}</div>`;
+ }).join('');
+ const outstanding=credit.reduce((a,x)=>a+payableBalance(x.d),0);
+ const cash=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
+ const digital=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='GCash/Bank').reduce((x,p)=>x+Number(p.amount||0),0),0);
+ document.getElementById('totalPayableBalance').textContent=peso(outstanding);
+ document.getElementById('supplierCashPaidToday').textContent=peso(cash);
+ document.getElementById('supplierDigitalPaidToday').textContent=peso(digital);
+}
+function openSupplierPayment(i){
+ const d=deliveries[i];payableIndex.value=i;paySupplier.value=d.supplier||'Unnamed Supplier';payOutstanding.value=peso(payableBalance(d));payAmount.value='';payReference.value='';payablePaymentBox.classList.remove('hidden');payAmount.focus();
+}
+function saveSupplierPayment(){
+ const i=Number(payableIndex.value),d=deliveries[i],amount=Number(payAmount.value||0),bal=payableBalance(d);
+ if(!d||amount<=0){alert('Enter a valid payment amount.');return}
+ if(amount>bal+0.009){alert('Payment cannot be greater than the outstanding balance.');return}
+ d.supplierPayments=d.supplierPayments||[];d.supplierPayments.push({amount,method:payMethod.value,reference:payReference.value.trim(),time:new Date().toISOString()});
+ payablePaymentBox.classList.add('hidden');renderPayables();updatePurchaseFinance();reconcile();
+}
+function updatePurchaseFinance(){
+ const total=deliveries.reduce((a,d)=>a+Number(d.totalCost||0),0);
+ const cash=deliveries.filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
+ const digital=deliveries.filter(d=>d.payment==='Paid - GCash/Bank').reduce((a,d)=>a+Number(d.totalCost||0),0);
+ const payable=deliveries.filter(d=>d.payment==='Supplier Credit / Payable').reduce((a,d)=>a+payableBalance(d),0);
+ document.getElementById('fuelPurchaseTotal').textContent=peso(total);
+ document.getElementById('fuelCashPaid').textContent=peso(cash);
+ document.getElementById('fuelDigitalPaid').textContent=peso(digital);
+ document.getElementById('fuelPayable').textContent=peso(payable);
+ reconcile();
+}
+function removeDelivery(i){deliveries.splice(i,1);renderDeliveries();inventoryCalc()}
+function addTransaction(){
+ const amount=Number(txAmount.value||0); if(amount<=0){alert('Enter the cash-out amount.');return}
+ transactions.push({type:txType.value,category:txCategory.value.trim(),amount,description:txDesc.value.trim(),photoAttached:txPhoto.files.length>0,time:new Date().toISOString()});
+ txCategory.value='';txAmount.value='';txDesc.value='';txPhoto.value='';renderTransactions();syncCashOut();
+}
+function renderTransactions(){
+ const el=document.getElementById('transactionList');
+ if(!transactions.length){el.innerHTML='<small>No cash-out transactions recorded for this draft.</small>';return}
+ el.innerHTML=transactions.map((t,i)=>`<div class="tx"><b>${t.type}: ${peso(t.amount)}</b><small>${t.category||'Uncategorized'}${t.description?' • '+t.description:''}${t.photoAttached?' • Photo attached':''}</small><button class="mini" onclick="removeTransaction(${i})">Remove</button></div>`).join('');
+}
+function removeTransaction(i){transactions.splice(i,1);renderTransactions();syncCashOut()}
+function syncCashOut(){
+ const exp=transactions.filter(t=>t.type!=='Cash Withdrawal').reduce((a,t)=>a+t.amount,0);
+ const wd=transactions.filter(t=>t.type==='Cash Withdrawal').reduce((a,t)=>a+t.amount,0);
+ document.getElementById('expenses').value=exp||'';document.getElementById('withdrawal').value=wd||'';reconcile();
+}
+function inventoryCalc(){
+ fuels.forEach(([k,n])=>{
+   const delivered=deliveries.filter(d=>d.fuel===n).reduce((a,d)=>a+d.liters,0);
+   const sold=Math.max(0,val(k+'CL')-val(k+'OL'));
+   const expected=val(k+'BeginStock')+delivered-sold;
+   const variance=val(k+'ActualStock')-expected;
+   document.getElementById(k+'ExpectedStock').value=expected.toFixed(2)+' L';
+   document.getElementById(k+'StockVariance').value=(variance>0?'+':'')+variance.toFixed(2)+' L';
+ });
+}
+function previewPhoto(k,input){
+ const img=document.getElementById(k+'Preview');
+ if(input.files&&input.files[0]){img.src=URL.createObjectURL(input.files[0]);img.style.display='block'}
+ updatePhotoCount();
+}
+function updatePhotoCount(){let c=fuels.filter(([k])=>document.getElementById(k+'Photo').files.length).length;document.getElementById('photoCount').textContent=c+'/3'}
+function getRecord(){
+ if(!date.value)setAutomaticDate(true);
+ let rec={date:date.value,user:user.value,closed:false,fuels:{},
+ financial:{
+ cashSales:val('cashSales'),gcashSales:val('gcashSales'),creditSales:val('creditSales'),otherSales:val('otherSales'),
+ cashIn:val('cashIn'),expenses:val('expenses'),withdrawal:val('withdrawal'),actualCash:val('actualCash'),
+ remarks:document.getElementById('remarks').value
+ },deliveries:deliveries,transactions:transactions,inventory:{}};
+ fuels.forEach(([k,n])=>{rec.fuels[k]={name:n,openingAmount:val(k+'OA'),openingLiters:val(k+'OL'),closingAmount:val(k+'CA'),closingLiters:val(k+'CL'),sales:Math.max(0,val(k+'CA')-val(k+'OA')),litersSold:Math.max(0,val(k+'CL')-val(k+'OL')),photoAttached:document.getElementById(k+'Photo').files.length>0};
+ const delivered=deliveries.filter(d=>d.fuel===n).reduce((a,d)=>a+d.liters,0),expected=val(k+'BeginStock')+delivered-rec.fuels[k].litersSold;
+ rec.inventory[k]={beginningStock:val(k+'BeginStock'),delivered,expectedEnding:expected,actualEnding:val(k+'ActualStock'),variance:val(k+'ActualStock')-expected};
+ });
+ return rec;
+}
+function saveDraft(){localStorage.setItem('fuelDraft',JSON.stringify(getRecord()));document.getElementById('saveStatus').innerHTML='<div class="status">Draft saved on this device.</div>'}
+function closeDay(){
+ let r=getRecord();
+ for(const [k,n] of fuels){if(r.fuels[k].closingAmount<r.fuels[k].openingAmount||r.fuels[k].closingLiters<r.fuels[k].openingLiters){alert(n+' closing reading cannot be lower than opening reading.');return}}
+ if(!fuels.every(([k])=>r.fuels[k].photoAttached)){if(!confirm('One or more dispenser photos are missing. Close the day anyway for this test?'))return}
+ let disp=salesTotal(),pay=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales');
+ if(Math.abs(pay-disp)>0.009 && !document.getElementById('remarks').value.trim()){alert('Payment total does not match dispenser sales. Please enter a remarks/explanation before closing.');return}
+ let fuelCash=deliveries.filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
+ let supplierCash=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
+ let expected=val('cashSales')+val('cashIn')-val('expenses')-val('withdrawal')-fuelCash-supplierCash,variance=val('actualCash')-expected;
+ if(Math.abs(variance)>0.009 && !document.getElementById('remarks').value.trim()){alert('There is a cash over/short amount. Please enter a remarks/explanation before closing.');return}
+ if(!confirm('Close and lock this daily record?'))return;
+ r.closed=true;r.closedAt=new Date().toISOString();let h=JSON.parse(localStorage.getItem('fuelHistory')||'[]');h.push(r);localStorage.setItem('fuelHistory',JSON.stringify(h));localStorage.removeItem('fuelDraft');renderHistory();alert('Daily record closed and saved.');showPage('history');
+}
+function renderHistory(){
+ let h=JSON.parse(localStorage.getItem('fuelHistory')||'[]'),el=document.getElementById('historyList');
+ if(!h.length){el.innerHTML='<small>No closed records yet.</small>';return}
+ el.innerHTML='<table><thead><tr><th>Date</th><th>Sales</th><th>Liters</th></tr></thead><tbody>'+h.slice().reverse().map(r=>{let s=0,l=0;Object.values(r.fuels).forEach(f=>{s+=f.sales;l+=f.litersSold});return `<tr><td>${r.date}</td><td>${peso(s)}</td><td>${l.toFixed(2)} L</td></tr>`}).join('')+'</tbody></table>';
+}
+function showPage(id){
+ if(currentRole==='viewer' && (id==='record'||id==='admin'||id==='bookkeeper')) id='dashboard';
+ if(currentRole==='personnel' && (id==='admin'||id==='bookkeeper')) id='dashboard';
+ if(currentRole==='bookkeeper' && (id==='record'||id==='admin')) id='dashboard';
+ ['dashboard','record','history','bookkeeper','admin','settings'].forEach(x=>{
+  document.getElementById(x).classList.toggle('hidden',x!==id);
+  const n=document.getElementById('n-'+x); if(n)n.classList.toggle('active',x===id);
+ });
+ if(id==='history')renderHistory();
+ if(id==='admin'){renderAdminOverview();renderStorePrices();}
+ if(id==='bookkeeper')renderBookkeeper();
+ renderStorePrices();
+ if(id==='record')loadDispenserVerification();
+ calc();
+}
+function remittanceKey(){return 'fuelRemittancesV47';}
+function cashbookKey(){return 'fuelCentralCashbookV47';}
+function allRemittances(){try{return JSON.parse(localStorage.getItem(remittanceKey())||'[]')}catch(e){return []}}
+function allCashbook(){try{return JSON.parse(localStorage.getItem(cashbookKey())||'[]')}catch(e){return []}}
+function initBookkeeper(){
+ const d=document.getElementById('remitDate');if(d)d.value=localDateISO();
+ const s=document.getElementById('remitStore');if(s)s.innerHTML=prototypeStores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+}
+function confirmRemittance(){
+ if(!(currentRole==='bookkeeper'||currentRole==='admin')){alert('Only Main Cashier / Bookkeeper or Admin can confirm remittances.');return;}
+ const expected=Number(document.getElementById('remitExpected').value||0),actual=Number(document.getElementById('remitActual').value||0);
+ if(actual<0||expected<0){alert('Amounts cannot be negative.');return;}
+ const row={id:'R'+Date.now(),date:document.getElementById('remitDate').value||localDateISO(),store:document.getElementById('remitStore').value,cashier:document.getElementById('remitCashier').value.trim()||'Not specified',expected,actual,variance:actual-expected,note:document.getElementById('remitNote').value.trim(),confirmedBy:currentUser,confirmedAt:new Date().toISOString()};
+ const a=allRemittances();a.push(row);localStorage.setItem(remittanceKey(),JSON.stringify(a));
+ document.getElementById('remitExpected').value='';document.getElementById('remitActual').value='';document.getElementById('remitNote').value='';
+ document.getElementById('remitStatus').innerHTML='<div class="status">Cash receipt confirmed and locked in the remittance history.</div>';renderBookkeeper();
+}
+function addCashbookEntry(){
+ if(!(currentRole==='bookkeeper'||currentRole==='admin'))return; const type=document.getElementById('bkType').value;
+ const isIn=type==='Other Cash In'||type==='Borrowed Cash In'||type==='Payable Collection';
+ const amount=Number((isIn?document.getElementById('bkOtherIn'):document.getElementById('bkCashOut')).value||0);if(amount<=0){alert('Enter the cashbook amount.');return;}
+ const a=allCashbook();a.push({id:'C'+Date.now(),date:localDateISO(),type,amount,direction:isIn?'in':'out',description:document.getElementById('bkDesc').value.trim(),user:currentUser,at:new Date().toISOString()});localStorage.setItem(cashbookKey(),JSON.stringify(a));
+ document.getElementById('bkOtherIn').value='';document.getElementById('bkCashOut').value='';document.getElementById('bkDesc').value='';renderBookkeeper();
+}
+function renderBookkeeper(){
+ initBookkeeper();const rs=allRemittances(),cb=allCashbook(),today=localDateISO(),todayR=rs.filter(x=>x.date===today);
+ const expected=todayR.reduce((a,x)=>a+Number(x.expected||0),0),received=todayR.reduce((a,x)=>a+Number(x.actual||0),0),variance=received-expected;
+ const cashOnHand=rs.reduce((a,x)=>a+Number(x.actual||0),0)+cb.reduce((a,x)=>a+(x.direction==='in'?1:-1)*Number(x.amount||0),0);
+ const put=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=peso(v)};put('bkExpected',expected);put('bkReceived',received);put('bkUnremitted',Math.max(0,expected-received));put('bkVariance',variance);put('bkCashOnHand',cashOnHand);
+ const rl=document.getElementById('remittanceList');if(rl)rl.innerHTML=rs.length?rs.slice().reverse().map(r=>`<div class="tx"><b>${prototypeStores.find(s=>s.id===r.store)?.name||r.store} — ${peso(r.actual)}</b><small>${r.date} • ${r.cashier} • Expected ${peso(r.expected)} • Difference ${(r.variance>0?'+':'')+peso(r.variance)} • Confirmed by ${r.confirmedBy}${r.note?' • '+r.note:''}</small></div>`).join(''):'<small>No confirmed remittances yet.</small>';
+ const cl=document.getElementById('cashbookList');if(cl)cl.innerHTML=cb.length?cb.slice().reverse().map(r=>`<div class="tx"><b>${r.type}: ${r.direction==='in'?'+':'-'}${peso(r.amount)}</b><small>${r.date} • ${r.description||'No description'} • ${r.user}</small></div>`).join(''):'<small>No central cashbook entries yet.</small>';
+}
+initBookkeeper();
+
+function exportData(){let data={draft:JSON.parse(localStorage.getItem('fuelDraft')||'null'),history:JSON.parse(localStorage.getItem('fuelHistory')||'[]'),remittances:allRemittances(),centralCashbook:allCashbook()};let b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='fuel-sales-backup.json';a.click()}
+(function load(){let r=JSON.parse(localStorage.getItem('fuelDraft')||'null');if(!r)return;date.value=r.date||date.value;user.value=r.user||'';fuels.forEach(([k])=>{let f=r.fuels[k]||{};document.getElementById(k+'OA').value=f.openingAmount||'';document.getElementById(k+'OL').value=f.openingLiters||'';document.getElementById(k+'CA').value=f.closingAmount||'';document.getElementById(k+'CL').value=f.closingLiters||''});
+ let f=r.financial||{};['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{document.getElementById(id).value=f[id]||''});document.getElementById('remarks').value=f.remarks||'';
+ deliveries=r.deliveries||[];deliveries.forEach((d,i)=>{d.supplierPayments=d.supplierPayments||[];d.id=d.id||('OLD'+i)});transactions=r.transactions||[];
+ fuels.forEach(([k])=>{let inv=(r.inventory||{})[k]||{};document.getElementById(k+'BeginStock').value=inv.beginningStock||'';document.getElementById(k+'ActualStock').value=inv.actualEnding||''});
+ renderDeliveries();renderTransactions();syncCashOut();calc()})();
+refreshSupplierOptions();
+let lastCalendarDate=localDateISO();
+setInterval(()=>{const nowDay=localDateISO();if(nowDay!==lastCalendarDate){lastCalendarDate=nowDay;const draft=JSON.parse(localStorage.getItem('fuelDraft')||'null');if(!draft||draft.date!==document.getElementById('date').value)setAutomaticDate(true);refreshSupplierOptions();}},60000);
+renderDeliveries();renderTransactions();renderHistory();calc();
+</script>
+</body></html>
