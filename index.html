@@ -76,6 +76,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
   <div style="height:14px"></div>
   <button onclick="onlineSignIn()">Sign In</button>
   <button class="secondary" style="margin-top:8px" onclick="onlineSignUp()">Create User Account</button>
+  <button class="secondary" style="margin-top:8px" onclick="onlineResendConfirmation()">Resend Confirmation Email</button>
   <button class="secondary" style="margin-top:8px" onclick="onlineRequestPasswordReset()">Forgot Password / Reset Password</button>
   <div id="passwordRecoveryPanel" class="hidden" style="margin-top:14px;padding:14px;border:1px solid #cbd3da;border-radius:12px;background:#f8fafb">
     <b>Set a New Password</b>
@@ -879,6 +880,27 @@ async function onlineSignIn(){
   if(error){authMessage('Sign in failed: '+cleanError(error));return;}
   await bootOnlineSession();
 }
+
+window.onlineResendConfirmation=async function(){
+  const email=(document.getElementById('authEmail').value||'').trim();
+  if(!email){authMessage('Enter the account email first, then tap Resend Confirmation Email.');return;}
+  authMessage('Sending confirmation email...');
+  const {error}=await mcloiDb.auth.resend({
+    type:'signup',
+    email,
+    options:{emailRedirectTo:'https://allanastoriano-commits.github.io/fuel-daily-sales-system/'}
+  });
+  if(error){
+    const msg=cleanError(error);
+    if(msg.toLowerCase().includes('rate limit')){
+      authMessage('Confirmation email could not be sent yet because the email rate limit is still active. Please wait a little longer and try only once.');
+    }else{
+      authMessage('Could not resend confirmation email: '+msg);
+    }
+    return;
+  }
+  authMessage('Confirmation email sent. Check Inbox, Spam and Promotions, then open the newest confirmation message.',true);
+};
 
 window.onlineRequestPasswordReset=async function(){
   const email=(document.getElementById('authEmail').value||'').trim();
