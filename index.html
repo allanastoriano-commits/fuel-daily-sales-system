@@ -143,7 +143,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
    <div><label>Receipt / Reference</label><input id="deliveryRef" placeholder="Optional reference"></div>
    <div><label>Receipt Photo</label><input id="deliveryPhoto" type="file" accept="image/*" capture="environment"></div>
   </div>
-  <div style="margin-top:10px"><button onclick="addDelivery()">Add Fuel Delivery</button></div>
+  <div style="margin-top:10px"><button onclick="addDelivery()">Add Fuel Delivery</button></div><small class="muted">Added deliveries are automatically saved to the online draft.</small>
   <div id="deliveryList"></div>
   <div class="row3" style="margin-top:12px">
    <div class="metric"><b id="fuelPurchaseTotal">₱0.00</b><span>FUEL PURCHASES</span></div>
@@ -661,6 +661,7 @@ function addDelivery(){
  deliveries.push({id:'D'+Date.now(),fuel:deliveryFuel.value,supplier:supplier,liters,costPerLiter:cost,totalCost:liters*cost,payment:deliveryPayment.value,reference:deliveryRef.value.trim(),photoAttached:deliveryPhoto.files.length>0,time:new Date().toISOString(),supplierPayments:[]});
  deliverySupplier.value='FUEL CENTRAL';deliveryLiters.value='';deliveryCost.value='';deliveryRef.value='';deliveryPhoto.value='';
  renderDeliveries();inventoryCalc();
+ if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0);
 }
 function renderDeliveries(){
  const el=document.getElementById('deliveryList');
@@ -695,6 +696,7 @@ function saveSupplierPayment(){
  if(amount>bal+0.009){alert('Payment cannot be greater than the outstanding balance.');return}
  d.supplierPayments=d.supplierPayments||[];d.supplierPayments.push({amount,method:payMethod.value,reference:payReference.value.trim(),time:new Date().toISOString()});
  payablePaymentBox.classList.add('hidden');renderPayables();updatePurchaseFinance();reconcile();
+ if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0);
 }
 function updatePurchaseFinance(){
  const total=deliveries.reduce((a,d)=>a+Number(d.totalCost||0),0);
@@ -707,18 +709,19 @@ function updatePurchaseFinance(){
  document.getElementById('fuelPayable').textContent=peso(payable);
  reconcile();
 }
-function removeDelivery(i){deliveries.splice(i,1);renderDeliveries();inventoryCalc()}
+function removeDelivery(i){deliveries.splice(i,1);renderDeliveries();inventoryCalc();if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0)}
 function addTransaction(){
  const amount=Number(txAmount.value||0); if(amount<=0){alert('Enter the cash-out amount.');return}
  transactions.push({type:txType.value,category:txCategory.value.trim(),amount,description:txDesc.value.trim(),photoAttached:txPhoto.files.length>0,time:new Date().toISOString()});
  txCategory.value='';txAmount.value='';txDesc.value='';txPhoto.value='';renderTransactions();syncCashOut();
+ if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0);
 }
 function renderTransactions(){
  const el=document.getElementById('transactionList');
  if(!transactions.length){el.innerHTML='<small>No cash-out transactions recorded for this draft.</small>';return}
  el.innerHTML=transactions.map((t,i)=>`<div class="tx"><b>${t.type}: ${peso(t.amount)}</b><small>${t.category||'Uncategorized'}${t.description?' • '+t.description:''}${t.photoAttached?' • Photo attached':''}</small><button class="mini" onclick="removeTransaction(${i})">Remove</button></div>`).join('');
 }
-function removeTransaction(i){transactions.splice(i,1);renderTransactions();syncCashOut()}
+function removeTransaction(i){transactions.splice(i,1);renderTransactions();syncCashOut();if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0)}
 function syncCashOut(){
  const exp=transactions.filter(t=>t.type!=='Cash Withdrawal').reduce((a,t)=>a+t.amount,0);
  const wd=transactions.filter(t=>t.type==='Cash Withdrawal').reduce((a,t)=>a+t.amount,0);
@@ -1113,15 +1116,70 @@ function recordTotals(r){
   const actual=Number(r.financial?.actualCash||0); return {totalSales,totalLiters,expected,actual,variance:actual-expected};
 }
 
-window.saveDraft=async function(){
-  if(!(currentRole==='admin'||currentRole==='personnel')){alert('This role cannot save daily records.');return;}
+window.saveDraft=async function(options={}){
+  const silent=!!options.silent;
+  if(!(currentRole==='admin'||currentRole==='personnel')){
+    if(!silent)alert('This role cannot save daily records.');
+    return false;
+  }
+  if(!mcloiSessionUser)return false;
   const r=getRecord(); const t=recordTotals(r); r.user=currentUser;
   const payload={store_id:currentStore,business_date:r.date,status:'draft',cashier_name:currentUser,record_data:r,total_sales:t.totalSales,total_liters:t.totalLiters,expected_cash:t.expected,actual_cash:t.actual,cash_variance:t.variance,updated_by:mcloiSessionUser.id,created_by:mcloiSessionUser.id};
   const {error}=await mcloiDb.from('mcloi_daily_records').upsert(payload,{onConflict:'store_id,business_date'});
-  if(error){alert('Draft could not be saved online: '+cleanError(error));return;}
+  const st=document.getElementById('saveStatus');
+  if(error){
+    if(!silent)alert('Draft could not be saved online: '+cleanError(error));
+    else if(st)st.innerHTML='<div style="font-size:13px;color:#9a4b00;margin-top:8px">Auto-save could not sync yet. Keep the app open and check your connection.</div>';
+    return false;
+  }
   localStorage.setItem(storeKey('fuelOnlineDraftCache'),JSON.stringify(r));
-  document.getElementById('saveStatus').innerHTML='<div class="status">Draft saved online and synchronized.</div>';
+  if(st){
+    if(silent){
+      const now=new Date().toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'});
+      st.innerHTML='<div class="status">Auto-saved online at '+now+'.</div>';
+    }else{
+      st.innerHTML='<div class="status">Draft saved online and synchronized.</div>';
+    }
+  }
+  return true;
 };
+
+
+let mcloiAutosaveTimer=null;
+let mcloiAutosaveRunning=false;
+let mcloiAutosaveAgain=false;
+
+async function runOnlineAutosave(){
+  if(!(mcloiOnlineReady&&mcloiSessionUser&&(currentRole==='admin'||currentRole==='personnel')))return;
+  if(mcloiAutosaveRunning){mcloiAutosaveAgain=true;return;}
+  mcloiAutosaveRunning=true;
+  try{await window.saveDraft({silent:true});}
+  finally{
+    mcloiAutosaveRunning=false;
+    if(mcloiAutosaveAgain){mcloiAutosaveAgain=false;scheduleOnlineAutosave(250);}
+  }
+}
+
+function scheduleOnlineAutosave(delay=900){
+  if(!(mcloiOnlineReady&&mcloiSessionUser&&(currentRole==='admin'||currentRole==='personnel')))return;
+  clearTimeout(mcloiAutosaveTimer);
+  mcloiAutosaveTimer=setTimeout(runOnlineAutosave,delay);
+}
+
+(function enableRecordAutosave(){
+  const rec=document.getElementById('record');
+  if(!rec)return;
+  rec.addEventListener('input',e=>{
+    const el=e.target;
+    if(!el||el.type==='file'||el.readOnly||el.disabled)return;
+    scheduleOnlineAutosave(900);
+  });
+  rec.addEventListener('change',e=>{
+    const el=e.target;
+    if(!el||el.type==='file'||el.readOnly||el.disabled)return;
+    scheduleOnlineAutosave(150);
+  });
+})();
 
 async function uploadClosingPhotos(r){
   for(const [k,n] of fuels){
