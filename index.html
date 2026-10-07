@@ -860,7 +860,7 @@ async function onlineSignUp(){
   if(!email || password.length<6){authMessage('Enter a valid email and a password of at least 6 characters.');return;}
   authMessage('Creating account...');
   const displayName=email.split('@')[0];
-  const {data,error}=await mcloiDb.auth.signUp({email,password,options:{data:{display_name:displayName}}});
+  const {data,error}=await mcloiDb.auth.signUp({email,password,options:{data:{display_name:displayName},emailRedirectTo:'https://allanastoriano-commits.github.io/fuel-daily-sales-system/'}});
   if(error){authMessage('Account could not be created: '+cleanError(error));return;}
   if(data.session){
     authMessage('Account created. Waiting for Admin access approval.',true);
