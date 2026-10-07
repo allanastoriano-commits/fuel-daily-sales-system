@@ -227,11 +227,11 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
 </section>
 
 <section id="bookkeeper" class="hidden">
- <div class="card"><h2>Main Cashier / Bookkeeper</h2><div class="viewer-note">Central cash custody and reconciliation. Confirm what was actually received from each store; confirmed receipts are kept in the cashbook.</div>
+ <div class="card"><h2>Main Cashier / Bookkeeper</h2><div class="viewer-note">Central cash custody and reconciliation. Confirm what was actually received from each store; confirmed receipts are kept in the cashbook.</div><div id="bkDraftStatus" class="muted" style="margin-top:8px">Main Cashier entries are auto-saved online while you work.</div>
  <div class="admin-grid" style="margin-top:12px"><div class="metric"><b id="bkExpected">₱0.00</b><span>EXPECTED REMITTANCE</span></div><div class="metric"><b id="bkReceived">₱0.00</b><span>RECEIVED TODAY</span></div><div class="metric"><b id="bkUnremitted">₱0.00</b><span>UNREMITTED</span></div><div class="metric"><b id="bkVariance">₱0.00</b><span>SHORT / OVER</span></div><div class="metric"><b id="bkCashOnHand">₱0.00</b><span>CASH ON HAND</span></div></div></div>
  <div class="card"><h2>Confirm Store Cash Remittance</h2><div class="grid">
  <div><label>Date</label><input id="remitDate" type="date" readonly></div><div><label>Store</label><select id="remitStore"></select></div>
- <div><label>Remitting Cashier</label><input id="remitCashier" placeholder="Cashier / personnel name"></div><div><label>Expected Amount (₱)</label><input id="remitExpected" type="number" step="0.01"></div>
+ <div><label>Remitting Cashier</label><input id="remitCashier" placeholder="Cashier / personnel name"></div><div><label>Expected Amount (₱)</label><input id="remitExpected" type="number" step="0.01" readonly><small class="muted">Loaded automatically from the store's closed daily record.</small></div>
  <div><label>Actual Cash Received (₱)</label><input id="remitActual" type="number" step="0.01"></div><div><label>Reference / Note</label><input id="remitNote" placeholder="Optional reference or explanation"></div></div>
  <button style="margin-top:10px" onclick="confirmRemittance()">Confirm Cash Received</button><div id="remitStatus"></div></div>
  <div class="card"><h2>Central Cashbook</h2><div class="grid"><div><label>Other Cash In (₱)</label><input id="bkOtherIn" type="number" step="0.01"></div><div><label>Cash Out / Expense (₱)</label><input id="bkCashOut" type="number" step="0.01"></div><div><label>Description</label><input id="bkDesc" placeholder="Purpose / source"></div><div><label>Type</label><select id="bkType"><option>Other Cash In</option><option>Expense / Cash Out</option><option>Withdrawal</option><option>Borrowed Cash In</option><option>Payable Collection</option></select></div></div><button style="margin-top:10px" onclick="addCashbookEntry()">Add Cashbook Entry</button><div id="cashbookList"></div></div>
@@ -1243,6 +1243,86 @@ window.updateUserAccess=async function(userId){
   const {error}=await mcloiDb.from('mcloi_profiles').update({role,assigned_store_id:store,active:true}).eq('user_id',userId); if(error){alert('Access update failed: '+cleanError(error));return;} alert('User access updated.'); await renderUserManagement();
 };
 
+
+let mcloiBookkeeperAutosaveTimer=null;
+let mcloiBookkeeperDraftLoading=false;
+
+function collectBookkeeperDraft(){
+  return {
+    remitDate:document.getElementById('remitDate')?.value||localDateISO(),
+    remitStore:document.getElementById('remitStore')?.value||'store1',
+    remitCashier:document.getElementById('remitCashier')?.value||'',
+    remitActual:document.getElementById('remitActual')?.value||'',
+    remitNote:document.getElementById('remitNote')?.value||'',
+    bkOtherIn:document.getElementById('bkOtherIn')?.value||'',
+    bkCashOut:document.getElementById('bkCashOut')?.value||'',
+    bkDesc:document.getElementById('bkDesc')?.value||'',
+    bkType:document.getElementById('bkType')?.value||'Other Cash In'
+  };
+}
+
+async function saveBookkeeperDraftOnline(silent=true){
+  if(!mcloiSessionUser || !(currentRole==='bookkeeper'||currentRole==='admin'))return false;
+  const payload={user_id:mcloiSessionUser.id,draft_data:collectBookkeeperDraft(),updated_at:new Date().toISOString()};
+  const {error}=await mcloiDb.from('mcloi_bookkeeper_drafts').upsert(payload,{onConflict:'user_id'});
+  const st=document.getElementById('bkDraftStatus');
+  if(error){
+    if(st)st.textContent='Main Cashier draft could not sync yet. Check the connection.';
+    if(!silent)alert('Main Cashier draft could not be saved: '+cleanError(error));
+    return false;
+  }
+  if(st){
+    const now=new Date().toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'});
+    st.textContent='Main Cashier entries auto-saved online at '+now+'.';
+  }
+  return true;
+}
+
+function scheduleBookkeeperAutosave(delay=700){
+  if(mcloiBookkeeperDraftLoading || !mcloiOnlineReady || !mcloiSessionUser || !(currentRole==='bookkeeper'||currentRole==='admin'))return;
+  clearTimeout(mcloiBookkeeperAutosaveTimer);
+  mcloiBookkeeperAutosaveTimer=setTimeout(()=>saveBookkeeperDraftOnline(true),delay);
+}
+
+async function loadBookkeeperDraftOnline(){
+  if(!mcloiSessionUser || !(currentRole==='bookkeeper'||currentRole==='admin'))return;
+  const {data,error}=await mcloiDb.from('mcloi_bookkeeper_drafts').select('draft_data,updated_at').eq('user_id',mcloiSessionUser.id).maybeSingle();
+  if(error){console.warn(error);return;}
+  if(!data?.draft_data)return;
+  const d=data.draft_data||{};
+  mcloiBookkeeperDraftLoading=true;
+  try{
+    if(d.remitDate)document.getElementById('remitDate').value=d.remitDate;
+    if(d.remitStore && [...document.getElementById('remitStore').options].some(o=>o.value===d.remitStore))document.getElementById('remitStore').value=d.remitStore;
+    document.getElementById('remitCashier').value=d.remitCashier||'';
+    document.getElementById('remitActual').value=d.remitActual||'';
+    document.getElementById('remitNote').value=d.remitNote||'';
+    document.getElementById('bkOtherIn').value=d.bkOtherIn||'';
+    document.getElementById('bkCashOut').value=d.bkCashOut||'';
+    document.getElementById('bkDesc').value=d.bkDesc||'';
+    if(d.bkType && [...document.getElementById('bkType').options].some(o=>o.value===d.bkType))document.getElementById('bkType').value=d.bkType;
+  }finally{
+    mcloiBookkeeperDraftLoading=false;
+  }
+  const st=document.getElementById('bkDraftStatus');
+  if(st)st.textContent='Restored Main Cashier draft from the online database.';
+}
+
+(function enableBookkeeperDraftAutosave(){
+  const sec=document.getElementById('bookkeeper');
+  if(!sec)return;
+  sec.addEventListener('input',e=>{
+    const el=e.target;
+    if(!el || el.readOnly || el.disabled)return;
+    scheduleBookkeeperAutosave(700);
+  });
+  sec.addEventListener('change',e=>{
+    const el=e.target;
+    if(!el || el.readOnly || el.disabled)return;
+    scheduleBookkeeperAutosave(150);
+  });
+})();
+
 async function getClosedRecordForRemit(store,date){
   const {data}=await mcloiDb.from('mcloi_daily_records').select('id,expected_cash,cashier_name').eq('store_id',store).eq('business_date',date).eq('status','closed').maybeSingle(); return data||null;
 }
@@ -1265,15 +1345,17 @@ window.confirmRemittance=async function(){
   const rec=await getClosedRecordForRemit(store,date); if(!rec){alert('There is no closed daily record for this store and date.');return;}
   const expected=Number(rec.expected_cash||0); const row={daily_record_id:rec.id,store_id:store,business_date:date,cashier_name:rec.cashier_name||document.getElementById('remitCashier').value.trim(),expected_amount:expected,actual_amount:actual,variance:actual-expected,note:document.getElementById('remitNote').value.trim(),confirmed_by:mcloiSessionUser.id};
   const {error}=await mcloiDb.from('mcloi_remittances').insert(row); if(error){alert(error.code==='23505'?'This daily record has already been remitted.':'Remittance could not be saved: '+cleanError(error));return;}
-  document.getElementById('remitActual').value='';document.getElementById('remitNote').value='';document.getElementById('remitStatus').innerHTML='<div class="status">Cash receipt confirmed online and locked to the closed daily record.</div>';await renderBookkeeper();
+  document.getElementById('remitActual').value='';document.getElementById('remitNote').value='';document.getElementById('remitStatus').innerHTML='<div class="status">Cash receipt confirmed online and locked to the closed daily record.</div>';await saveBookkeeperDraftOnline(true);await renderBookkeeper();
 };
 window.addCashbookEntry=async function(){
   if(!(currentRole==='bookkeeper'||currentRole==='admin'))return; const type=document.getElementById('bkType').value; const isIn=type==='Other Cash In'||type==='Borrowed Cash In'||type==='Payable Collection'; const amount=Number((isIn?document.getElementById('bkOtherIn'):document.getElementById('bkCashOut')).value||0); if(amount<=0){alert('Enter the cashbook amount.');return;}
   const {error}=await mcloiDb.from('mcloi_cashbook').insert({business_date:localDateISO(),entry_type:type,direction:isIn?'in':'out',amount,description:document.getElementById('bkDesc').value.trim(),created_by:mcloiSessionUser.id}); if(error){alert('Cashbook entry failed: '+cleanError(error));return;}
-  document.getElementById('bkOtherIn').value='';document.getElementById('bkCashOut').value='';document.getElementById('bkDesc').value='';await renderBookkeeper();
+  document.getElementById('bkOtherIn').value='';document.getElementById('bkCashOut').value='';document.getElementById('bkDesc').value='';await saveBookkeeperDraftOnline(true);await renderBookkeeper();
 };
 window.renderBookkeeper=async function(){
   if(!(currentRole==='bookkeeper'||currentRole==='admin')||!mcloiSessionUser)return; initBookkeeper();
+  await loadBookkeeperDraftOnline();
+  await populateRemitExpected();
   const [{data:rs,error:er1},{data:cb,error:er2}]=await Promise.all([mcloiDb.from('mcloi_remittances').select('id,store_id,business_date,cashier_name,expected_amount,actual_amount,variance,note,confirmed_at').order('confirmed_at',{ascending:false}).limit(250),mcloiDb.from('mcloi_cashbook').select('id,business_date,entry_type,direction,amount,description,created_at').order('created_at',{ascending:false}).limit(250)]);
   if(er1||er2){console.warn(er1||er2);return;} const today=localDateISO(),todayR=(rs||[]).filter(x=>x.business_date===today); const expected=todayR.reduce((a,x)=>a+Number(x.expected_amount||0),0),received=todayR.reduce((a,x)=>a+Number(x.actual_amount||0),0),variance=received-expected; const cashOnHand=(rs||[]).reduce((a,x)=>a+Number(x.actual_amount||0),0)+(cb||[]).reduce((a,x)=>a+(x.direction==='in'?1:-1)*Number(x.amount||0),0); const put=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=peso(v)}; put('bkExpected',expected);put('bkReceived',received);put('bkUnremitted',Math.max(0,expected-received));put('bkVariance',variance);put('bkCashOnHand',cashOnHand);
   const rl=document.getElementById('remittanceList'); if(rl)rl.innerHTML=(rs||[]).length?(rs||[]).map(r=>`<div class="tx"><b>${prototypeStores.find(s=>s.id===r.store_id)?.name||r.store_id} — ${peso(r.actual_amount)}</b><small>${r.business_date} • ${r.cashier_name||'Cashier'} • Expected ${peso(r.expected_amount)} • Difference ${(Number(r.variance)>0?'+':'')+peso(r.variance)}${r.note?' • '+r.note:''}</small></div>`).join(''):'<small>No confirmed online remittances yet.</small>';
