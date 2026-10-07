@@ -1099,12 +1099,44 @@ function applyRecordToForm(r){
   deliveries=Array.isArray(r.deliveries)?r.deliveries:[]; transactions=Array.isArray(r.transactions)?r.transactions:[]; renderDeliveries();renderTransactions();syncCashOut();calc();
 }
 
+function recordLocalBackupKey(){ return storeKey('fuelOnlineDraftCache'); }
+function saveRecordLocalBackup(){
+  if(!(currentRole==='admin'||currentRole==='personnel'))return;
+  try{
+    const r=getRecord();
+    r.user=currentUser;
+    localStorage.setItem(recordLocalBackupKey(),JSON.stringify(r));
+  }catch(e){ console.warn('Local draft backup failed',e); }
+}
+function readRecordLocalBackup(){
+  try{return JSON.parse(localStorage.getItem(recordLocalBackupKey())||'null')}catch(e){return null}
+}
+
 async function loadOnlineDraft(){
   if(!mcloiSessionUser)return;
   const today=localDateISO(); setAutomaticDate(true);
+  const local=readRecordLocalBackup();
   const {data,error}=await mcloiDb.from('mcloi_daily_records').select('record_data,business_date,status').eq('store_id',currentStore).eq('business_date',today).eq('status','draft').maybeSingle();
-  if(error){console.warn(error);clearRecordForm();return;}
-  if(data?.record_data){applyRecordToForm(data.record_data);} else {clearRecordForm(); document.getElementById('date').value=today; document.getElementById('user').value=currentUser;}
+  if(error){
+    console.warn(error);
+    if(local && local.date===today){
+      applyRecordToForm(local);
+      const st=document.getElementById('saveStatus'); if(st)st.innerHTML='<div class="status">Restored from this phone. Online sync will retry automatically.</div>';
+    }else{
+      clearRecordForm(); document.getElementById('date').value=today; document.getElementById('user').value=currentUser;
+    }
+    return;
+  }
+  if(data?.record_data){
+    applyRecordToForm(data.record_data);
+    localStorage.setItem(recordLocalBackupKey(),JSON.stringify(data.record_data));
+  } else if(local && local.date===today){
+    applyRecordToForm(local);
+    const st=document.getElementById('saveStatus'); if(st)st.innerHTML='<div class="status">Restored from this phone and preparing online sync.</div>';
+    setTimeout(()=>window.saveDraft({silent:true}),150);
+  } else {
+    clearRecordForm(); document.getElementById('date').value=today; document.getElementById('user').value=currentUser;
+  }
 }
 window.loadDraft=loadOnlineDraft;
 
@@ -1123,6 +1155,7 @@ window.saveDraft=async function(options={}){
     return false;
   }
   if(!mcloiSessionUser)return false;
+  saveRecordLocalBackup();
   const r=getRecord(); const t=recordTotals(r); r.user=currentUser;
   const payload={store_id:currentStore,business_date:r.date,status:'draft',cashier_name:currentUser,record_data:r,total_sales:t.totalSales,total_liters:t.totalLiters,expected_cash:t.expected,actual_cash:t.actual,cash_variance:t.variance,updated_by:mcloiSessionUser.id,created_by:mcloiSessionUser.id};
   const {error}=await mcloiDb.from('mcloi_daily_records').upsert(payload,{onConflict:'store_id,business_date'});
@@ -1132,7 +1165,7 @@ window.saveDraft=async function(options={}){
     else if(st)st.innerHTML='<div style="font-size:13px;color:#9a4b00;margin-top:8px">Auto-save could not sync yet. Keep the app open and check your connection.</div>';
     return false;
   }
-  localStorage.setItem(storeKey('fuelOnlineDraftCache'),JSON.stringify(r));
+  localStorage.setItem(recordLocalBackupKey(),JSON.stringify(r));
   if(st){
     if(silent){
       const now=new Date().toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'});
@@ -1161,6 +1194,8 @@ async function runOnlineAutosave(){
 }
 
 function scheduleOnlineAutosave(delay=900){
+  // Always keep an immediate on-device backup first, even if the network is slow/offline.
+  if(currentRole==='admin'||currentRole==='personnel')saveRecordLocalBackup();
   if(!(mcloiOnlineReady&&mcloiSessionUser&&(currentRole==='admin'||currentRole==='personnel')))return;
   clearTimeout(mcloiAutosaveTimer);
   mcloiAutosaveTimer=setTimeout(runOnlineAutosave,delay);
@@ -1247,6 +1282,17 @@ window.updateUserAccess=async function(userId){
 let mcloiBookkeeperAutosaveTimer=null;
 let mcloiBookkeeperDraftLoading=false;
 
+function bookkeeperLocalDraftKey(){
+  return 'mcloiBookkeeperDraftLocal__'+(mcloiSessionUser?.id||'pending');
+}
+function saveBookkeeperLocalBackup(){
+  if(!(currentRole==='bookkeeper'||currentRole==='admin'))return;
+  try{localStorage.setItem(bookkeeperLocalDraftKey(),JSON.stringify(collectBookkeeperDraft()));}catch(e){console.warn('Main Cashier local backup failed',e);}
+}
+function readBookkeeperLocalBackup(){
+  try{return JSON.parse(localStorage.getItem(bookkeeperLocalDraftKey())||'null')}catch(e){return null}
+}
+
 function collectBookkeeperDraft(){
   return {
     remitDate:document.getElementById('remitDate')?.value||localDateISO(),
@@ -1263,6 +1309,7 @@ function collectBookkeeperDraft(){
 
 async function saveBookkeeperDraftOnline(silent=true){
   if(!mcloiSessionUser || !(currentRole==='bookkeeper'||currentRole==='admin'))return false;
+  saveBookkeeperLocalBackup();
   const payload={user_id:mcloiSessionUser.id,draft_data:collectBookkeeperDraft(),updated_at:new Date().toISOString()};
   const {error}=await mcloiDb.from('mcloi_bookkeeper_drafts').upsert(payload,{onConflict:'user_id'});
   const st=document.getElementById('bkDraftStatus');
@@ -1279,17 +1326,20 @@ async function saveBookkeeperDraftOnline(silent=true){
 }
 
 function scheduleBookkeeperAutosave(delay=700){
-  if(mcloiBookkeeperDraftLoading || !mcloiOnlineReady || !mcloiSessionUser || !(currentRole==='bookkeeper'||currentRole==='admin'))return;
+  if(mcloiBookkeeperDraftLoading)return;
+  if(currentRole==='bookkeeper'||currentRole==='admin')saveBookkeeperLocalBackup();
+  if(!mcloiOnlineReady || !mcloiSessionUser || !(currentRole==='bookkeeper'||currentRole==='admin'))return;
   clearTimeout(mcloiBookkeeperAutosaveTimer);
   mcloiBookkeeperAutosaveTimer=setTimeout(()=>saveBookkeeperDraftOnline(true),delay);
 }
 
 async function loadBookkeeperDraftOnline(){
   if(!mcloiSessionUser || !(currentRole==='bookkeeper'||currentRole==='admin'))return;
+  const local=readBookkeeperLocalBackup();
   const {data,error}=await mcloiDb.from('mcloi_bookkeeper_drafts').select('draft_data,updated_at').eq('user_id',mcloiSessionUser.id).maybeSingle();
-  if(error){console.warn(error);return;}
-  if(!data?.draft_data)return;
-  const d=data.draft_data||{};
+  if(error){console.warn(error);}
+  const d=(data?.draft_data)||local||null;
+  if(!d)return;
   mcloiBookkeeperDraftLoading=true;
   try{
     if(d.remitDate)document.getElementById('remitDate').value=d.remitDate;
@@ -1304,8 +1354,10 @@ async function loadBookkeeperDraftOnline(){
   }finally{
     mcloiBookkeeperDraftLoading=false;
   }
+  saveBookkeeperLocalBackup();
   const st=document.getElementById('bkDraftStatus');
-  if(st)st.textContent='Restored Main Cashier draft from the online database.';
+  if(st)st.textContent=data?.draft_data?'Restored Main Cashier draft from the online database.':'Restored Main Cashier draft from this phone; syncing online.';
+  if(!data?.draft_data && local)setTimeout(()=>saveBookkeeperDraftOnline(true),150);
 }
 
 (function enableBookkeeperDraftAutosave(){
@@ -1391,6 +1443,12 @@ mcloiDb.auth.onAuthStateChange((event,session)=>{
     showPasswordRecoveryPanel();
     authMessage('Reset link verified. Enter and confirm your new password below.',true);
   }
+});
+window.addEventListener('pagehide',()=>{
+  try{
+    if(currentRole==='admin'||currentRole==='personnel')saveRecordLocalBackup();
+    if(currentRole==='bookkeeper'||currentRole==='admin')saveBookkeeperLocalBackup();
+  }catch(e){}
 });
 window.addEventListener('load',()=>{ setTimeout(bootOnlineSession,0); });
 </script>
