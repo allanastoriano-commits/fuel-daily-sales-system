@@ -1172,9 +1172,17 @@ window.reviewPriorRecord=async function(){
  const inv=data.record_data?.inventory||{};
  const rows=deliveries.map(d=>'<tr><td>'+safeReviewText(d.fuel)+'</td><td>'+Number(d.liters||0).toFixed(2)+' L</td><td>'+peso(d.totalCost)+'</td><td>'+safeReviewText(d.payment)+'</td></tr>').join('');
  const stock=[['regular','Regular / Unleaded'],['premium','Premium'],['diesel','Diesel']].map(([k,label])=>'<tr><td>'+label+'</td><td>'+Number(inv[k]?.beginningStock||0).toFixed(2)+' L</td><td>'+Number(inv[k]?.delivered||0).toFixed(2)+' L</td></tr>').join('');
+ const reconstruction=data.record_data?.salesReconstruction;
+ const fuelSales=data.record_data?.fuels||{};
+ const fuelSalesRows=[['regular','Regular'],['premium','Premium'],['diesel','Diesel']].map(([k,name])=>'<tr><td>'+name+'</td><td>'+Number(fuelSales[k]?.litersSold||0).toFixed(2)+' L</td><td>'+peso(fuelSales[k]?.sales||0)+'</td></tr>').join('');
+ const salesReviewHtml=reconstruction?'<h3 style="margin-top:12px">Reconstructed Fuel Sales</h3><table><thead><tr><th>Fuel</th><th>Liters Sold</th><th>Calculated Sales</th></tr></thead><tbody>'+fuelSalesRows+'</tbody></table>'
+  +'<div class="viewer-note" style="margin-top:8px"><b>Total: '+Number(data.total_liters||0).toFixed(2)+' L — '+peso(data.total_sales||0)+'</b><div>Verified cumulative liter readings × selling prices. Peso totalizers unavailable.</div></div>'
+  +'<div style="margin-top:8px;padding:10px;border-radius:10px;background:#fff3e8"><b>Cash reconciliation pending.</b> Reported cash remittance: '+peso(reconstruction.cashRemittedReported||0)+'. Difference requiring explanation: '+peso(reconstruction.cashDifferencePendingReview||0)+'. Not a confirmed shortage.</div>'
+  :'<div style="margin-top:8px" class="muted">No reconstructed sales saved for this date.</div>';
  out.innerHTML='<div class="viewer-note"><b>'+safeReviewText(data.business_date)+'</b> — '+safeReviewText(data.status).toUpperCase()+' (READ-ONLY)</div>'
  +'<h3>Fuel Deliveries</h3>'+(deliveries.length?'<div style="overflow-x:auto"><table><thead><tr><th>Fuel</th><th>Delivered</th><th>Cost</th><th>Paid From</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<small>No deliveries saved for this date.</small>')
  +'<h3 style="margin-top:12px">Beginning Inventory and Deliveries</h3><table><thead><tr><th>Fuel</th><th>Beginning</th><th>Delivered</th></tr></thead><tbody>'+stock+'</tbody></table>'
+ +salesReviewHtml
  +'<small>Previous-day record for review only. It has not been copied into today; do not re-enter these deliveries.</small>';
 };
 
