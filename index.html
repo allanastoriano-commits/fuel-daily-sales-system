@@ -139,7 +139,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
    <div><label>Supplier</label><input id="deliverySupplier" list="supplierOptions" value="FUEL CENTRAL" placeholder="Select or enter supplier"><datalist id="supplierOptions"><option value="FUEL CENTRAL"></option></datalist><small class="muted">FUEL CENTRAL is the default. Other supplier names entered here are remembered for 24 hours.</small></div>
    <div><label>Liters Delivered</label><input id="deliveryLiters" type="number" step="0.01" inputmode="decimal"></div>
    <div><label>Cost per Liter (₱)</label><input id="deliveryCost" type="number" step="0.01" inputmode="decimal"></div>
-   <div><label>Payment Status / Method</label><select id="deliveryPayment"><option>Paid - Cash</option><option>Paid - GCash/Bank</option><option>Supplier Credit / Payable</option></select></div>
+   <div><label>Payment Status / Source</label><select id="deliveryPayment"><option>Paid - Cash</option><option value="Paid - Owner's Personal Cash">Paid - Owner's Personal Cash</option><option>Paid - GCash/Bank</option><option>Supplier Credit / Payable</option></select></div>
    <div><label>Receipt / Reference</label><input id="deliveryRef" placeholder="Optional reference"></div>
    <div><label>Receipt Photo</label><input id="deliveryPhoto" type="file" accept="image/*" capture="environment"></div>
   </div>
@@ -147,10 +147,10 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
   <div id="deliveryList"></div>
   <div class="row3" style="margin-top:12px">
    <div class="metric"><b id="fuelPurchaseTotal">₱0.00</b><span>FUEL PURCHASES</span></div>
-   <div class="metric"><b id="fuelCashPaid">₱0.00</b><span>PAID BY CASH</span></div>
+   <div class="metric"><b id="fuelCashPaid">₱0.00</b><span>PAID BY STATION CASH</span></div>
    <div class="metric"><b id="fuelPayable">₱0.00</b><span>SUPPLIER PAYABLE</span></div>
   </div>
-  <div style="margin-top:8px" class="metric"><b id="fuelDigitalPaid">₱0.00</b><span>PAID BY GCASH / BANK</span></div>
+  <div style="margin-top:8px" class="metric"><b id="fuelDigitalPaid">₱0.00</b><span>PAID BY GCASH / BANK</span></div><div style="margin-top:8px" class="metric"><b id="fuelOwnerPaid">₱0.00</b><span>PAID BY OWNER'S PERSONAL CASH (NOT DEDUCTED FROM CASHIER)</span></div>
   <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
   <h3 style="margin:0 0 10px">Inventory Reconciliation</h3>
   <div id="inventoryRows"></div>
@@ -166,15 +166,15 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
     <div><label>Supplier</label><input id="paySupplier" readonly></div>
     <div><label>Outstanding Balance</label><input id="payOutstanding" readonly></div>
     <div><label>Amount to Pay (₱)</label><input id="payAmount" type="number" step="0.01" inputmode="decimal"></div>
-    <div><label>Payment Method</label><select id="payMethod"><option>Cash</option><option>GCash/Bank</option></select></div>
+    <div><label>Payment Method</label><select id="payMethod"><option>Cash</option><option>Owner's Personal Cash</option><option>GCash/Bank</option></select></div>
     <div><label>Reference / Note</label><input id="payReference" placeholder="Optional"></div>
    </div>
    <div style="margin-top:10px"><button onclick="saveSupplierPayment()">Save Supplier Payment</button></div>
   </div>
   <div class="row3" style="margin-top:12px">
    <div class="metric"><b id="totalPayableBalance">₱0.00</b><span>OUTSTANDING</span></div>
-   <div class="metric"><b id="supplierCashPaidToday">₱0.00</b><span>CASH PAID</span></div>
-   <div class="metric"><b id="supplierDigitalPaidToday">₱0.00</b><span>GCASH/BANK PAID</span></div>
+   <div class="metric"><b id="supplierCashPaidToday">₱0.00</b><span>STATION CASH PAID</span></div>
+   <div class="metric"><b id="supplierDigitalPaidToday">₱0.00</b><span>GCASH/BANK PAID</span></div><div class="metric"><b id="supplierOwnerPaidToday">₱0.00</b><span>OWNER CASH PAID</span></div>
   </div>
  </div>
  <div class="card">
@@ -212,7 +212,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
    <div><label>Actual Cash Count (₱)</label><input id="actualCash" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
   </div>
   <div class="grid" style="margin-top:12px">
-   <div><label>Expected Cash (after fuel & supplier cash payments)</label><input id="expectedCash" readonly></div>
+   <div><label>Expected Cash (after station-paid fuel & supplier cash payments)</label><input id="expectedCash" readonly></div>
    <div><label>Cash Over / Short</label><input id="cashVariance" readonly></div>
   </div>
   <div style="margin-top:10px"><label>Remarks / Explanation</label><textarea id="remarks" rows="3" placeholder="Explain any payment or cash discrepancy"></textarea></div>
@@ -595,6 +595,7 @@ function fuelHTML(k,n){return `<div class="card fuel"><h3>${n}</h3>
 <div style="margin-top:10px"><label>Closing Dispenser Photo</label><input id="${k}Photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto('${k}',this)"><img class="photo" id="${k}Preview"></div></div>`}
 document.getElementById('fuelCards').innerHTML=fuels.map(x=>fuelHTML(...x)).join('');
 document.getElementById('inventoryRows').innerHTML=fuels.map(([k,n])=>`<div class="card" style="box-shadow:none;margin-bottom:8px"><b>${n}</b><div class="grid" style="margin-top:8px"><div><label>Beginning Stock (L)</label><input id="${k}BeginStock" type="number" step="0.01" inputmode="decimal" oninput="inventoryCalc()"></div><div><label>Actual Ending Stock (L)</label><input id="${k}ActualStock" type="number" step="0.01" inputmode="decimal" oninput="inventoryCalc()"></div><div><label>Expected Ending Stock</label><input id="${k}ExpectedStock" readonly></div><div><label>Inventory Variance</label><input id="${k}StockVariance" readonly></div></div></div>`).join('');
+const OWNER_FUNDED_PAYMENT="Paid - Owner's Personal Cash";
 let deliveries=[], transactions=[];
 
 
@@ -683,6 +684,8 @@ function renderPayables(){
  const outstanding=credit.reduce((a,x)=>a+payableBalance(x.d),0);
  const cash=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
  const digital=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='GCash/Bank').reduce((x,p)=>x+Number(p.amount||0),0),0);
+ const ownerPaid=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==="Owner's Personal Cash").reduce((x,p)=>x+Number(p.amount||0),0),0);
+ document.getElementById('supplierOwnerPaidToday').textContent=peso(ownerPaid);
  document.getElementById('totalPayableBalance').textContent=peso(outstanding);
  document.getElementById('supplierCashPaidToday').textContent=peso(cash);
  document.getElementById('supplierDigitalPaidToday').textContent=peso(digital);
@@ -702,10 +705,12 @@ function updatePurchaseFinance(){
  const total=deliveries.reduce((a,d)=>a+Number(d.totalCost||0),0);
  const cash=deliveries.filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
  const digital=deliveries.filter(d=>d.payment==='Paid - GCash/Bank').reduce((a,d)=>a+Number(d.totalCost||0),0);
+ const owner=deliveries.filter(d=>d.payment===OWNER_FUNDED_PAYMENT).reduce((a,d)=>a+Number(d.totalCost||0),0);
  const payable=deliveries.filter(d=>d.payment==='Supplier Credit / Payable').reduce((a,d)=>a+payableBalance(d),0);
  document.getElementById('fuelPurchaseTotal').textContent=peso(total);
  document.getElementById('fuelCashPaid').textContent=peso(cash);
  document.getElementById('fuelDigitalPaid').textContent=peso(digital);
+ document.getElementById('fuelOwnerPaid').textContent=peso(owner);
  document.getElementById('fuelPayable').textContent=peso(payable);
  reconcile();
 }
@@ -1142,6 +1147,7 @@ window.loadDraft=loadOnlineDraft;
 
 function recordTotals(r){
   let totalSales=0,totalLiters=0; Object.values(r.fuels||{}).forEach(f=>{totalSales+=Number(f.sales||0);totalLiters+=Number(f.litersSold||0);});
+  // Only fuel paid using station cashier funds is deducted; owner-funded stock is tracked separately.
   const fuelCash=(r.deliveries||[]).filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
   const supplierCash=(r.deliveries||[]).reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
   const expected=Number(r.financial?.cashSales||0)+Number(r.financial?.cashIn||0)-Number(r.financial?.expenses||0)-Number(r.financial?.withdrawal||0)-fuelCash-supplierCash;
