@@ -130,6 +130,16 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
  <div id="dispVerifySaved" class="muted" style="margin-top:8px"></div>
 </div>
  <div class="card"><h2>Daily Record</h2><div class="grid"><div><label>Date</label><input type="date" id="date" readonly><small id="dateHelp" class="muted">Date is set automatically. Only Admin can correct it manually.</small></div><div><label>Recorder / User</label><input id="user" placeholder="Name"></div></div></div>
+
+ <div class="card" id="priorRecordCard">
+  <h2>Review Earlier Online Records</h2>
+  <p class="muted">Today's Record form is separate from earlier dates. View previous purchases and inventory below without changing either day's data.</p>
+  <div class="grid">
+   <div><label>Earlier Business Date</label><input type="date" id="priorRecordDate"></div>
+   <div style="align-self:end"><button type="button" class="secondary" onclick="reviewPriorRecord()">View Saved Record</button></div>
+  </div>
+  <div id="priorRecordResult" style="margin-top:10px"></div>
+ </div>
  <div id="fuelCards"></div>
  <div class="card">
   <h2>Fuel Deliveries & Inventory</h2>
@@ -1145,6 +1155,30 @@ async function loadOnlineDraft(){
 }
 window.loadDraft=loadOnlineDraft;
 
+function safeReviewText(v){
+ return String(v===null||v===undefined?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+window.reviewPriorRecord=async function(){
+ const out=document.getElementById('priorRecordResult'), date=document.getElementById('priorRecordDate')?.value;
+ if(!out)return;
+ if(!mcloiSessionUser){out.textContent='Please sign in again.';return;}
+ if(!date){out.textContent='Select an earlier date first.';return;}
+ if(date>=localDateISO()){out.textContent='Select a past business date. The main Record form is for today.';return;}
+ out.textContent='Loading saved record from the online database...';
+ const {data,error}=await mcloiDb.from('mcloi_daily_records').select('business_date,status,total_sales,total_liters,expected_cash,record_data').eq('store_id',currentStore).eq('business_date',date).maybeSingle();
+ if(error){out.textContent='Could not load this date. Check your connection or permissions.';return;}
+ if(!data){out.textContent='No saved online daily record found for '+date+'.';return;}
+ const deliveries=Array.isArray(data.record_data?.deliveries)?data.record_data.deliveries:[];
+ const inv=data.record_data?.inventory||{};
+ const rows=deliveries.map(d=>'<tr><td>'+safeReviewText(d.fuel)+'</td><td>'+Number(d.liters||0).toFixed(2)+' L</td><td>'+peso(d.totalCost)+'</td><td>'+safeReviewText(d.payment)+'</td></tr>').join('');
+ const stock=[['regular','Regular / Unleaded'],['premium','Premium'],['diesel','Diesel']].map(([k,label])=>'<tr><td>'+label+'</td><td>'+Number(inv[k]?.beginningStock||0).toFixed(2)+' L</td><td>'+Number(inv[k]?.delivered||0).toFixed(2)+' L</td></tr>').join('');
+ out.innerHTML='<div class="viewer-note"><b>'+safeReviewText(data.business_date)+'</b> — '+safeReviewText(data.status).toUpperCase()+' (READ-ONLY)</div>'
+ +'<h3>Fuel Deliveries</h3>'+(deliveries.length?'<div style="overflow-x:auto"><table><thead><tr><th>Fuel</th><th>Delivered</th><th>Cost</th><th>Paid From</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<small>No deliveries saved for this date.</small>')
+ +'<h3 style="margin-top:12px">Beginning Inventory and Deliveries</h3><table><thead><tr><th>Fuel</th><th>Beginning</th><th>Delivered</th></tr></thead><tbody>'+stock+'</tbody></table>'
+ +'<small>Previous-day record for review only. It has not been copied into today; do not re-enter these deliveries.</small>';
+};
+
+
 function recordTotals(r){
   let totalSales=0,totalLiters=0; Object.values(r.fuels||{}).forEach(f=>{totalSales+=Number(f.sales||0);totalLiters+=Number(f.litersSold||0);});
   // Only fuel paid using station cashier funds is deducted; owner-funded stock is tracked separately.
@@ -1212,12 +1246,12 @@ function scheduleOnlineAutosave(delay=900){
   if(!rec)return;
   rec.addEventListener('input',e=>{
     const el=e.target;
-    if(!el||el.type==='file'||el.readOnly||el.disabled)return;
+    if(!el||el.id==='priorRecordDate'||el.type==='file'||el.readOnly||el.disabled)return;
     scheduleOnlineAutosave(900);
   });
   rec.addEventListener('change',e=>{
     const el=e.target;
-    if(!el||el.type==='file'||el.readOnly||el.disabled)return;
+    if(!el||el.id==='priorRecordDate'||el.type==='file'||el.readOnly||el.disabled)return;
     scheduleOnlineAutosave(150);
   });
 })();
