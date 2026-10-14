@@ -1195,8 +1195,16 @@ window.saveDraft=async function(options={}){
     return false;
   }
   if(!mcloiSessionUser)return false;
+  const r=getRecord();
+  if(r.date!==localDateISO()){
+    const msg='Past dates are protected from automatic saving. Review earlier dates without replacing saved inventory or deliveries.';
+    const status=document.getElementById('saveStatus');
+    if(status)status.textContent=msg;
+    if(!silent)alert(msg);
+    return false;
+  }
   saveRecordLocalBackup();
-  const r=getRecord(); const t=recordTotals(r); r.user=currentUser;
+  const t=recordTotals(r); r.user=currentUser;
   const payload={store_id:currentStore,business_date:r.date,status:'draft',cashier_name:currentUser,record_data:r,total_sales:t.totalSales,total_liters:t.totalLiters,expected_cash:t.expected,actual_cash:t.actual,cash_variance:t.variance,updated_by:mcloiSessionUser.id,created_by:mcloiSessionUser.id};
   const {error}=await mcloiDb.from('mcloi_daily_records').upsert(payload,{onConflict:'store_id,business_date'});
   const st=document.getElementById('saveStatus');
@@ -1269,6 +1277,7 @@ async function uploadClosingPhotos(r){
 window.closeDay=async function(){
   if(!(currentRole==='admin'||currentRole==='personnel')){alert('This role cannot close a daily record.');return;}
   let r=getRecord();
+  if(r.date!==localDateISO()){alert('Past dates cannot be closed from today\'s entry form. Use the historical correction procedure to avoid overwriting records.');return;}
   for(const [k,n] of fuels){if(r.fuels[k].closingAmount<r.fuels[k].openingAmount||r.fuels[k].closingLiters<r.fuels[k].openingLiters){alert(n+' closing reading cannot be lower than opening reading.');return;}}
   const missing=fuels.filter(([k])=>!document.getElementById(k+'Photo').files.length); if(missing.length && !confirm('One or more closing dispenser photos are missing. Close the day anyway?'))return;
   const disp=salesTotal(),pay=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales'); if(Math.abs(pay-disp)>0.009&&!document.getElementById('remarks').value.trim()){alert('Payment total does not match dispenser sales. Enter a remarks/explanation before closing.');return;}
