@@ -1535,23 +1535,81 @@ window.renderAdminOverview=async function(){
 };
 
 function ensureUserManagementCard(){
-  const admin=document.getElementById('admin'); if(!admin||document.getElementById('mcloiUserAccessCard'))return;
-  const card=document.createElement('div'); card.className='card'; card.id='mcloiUserAccessCard'; card.innerHTML='<h2>Users & Access</h2><p class="muted">New accounts stay pending until Admin assigns the correct role. Store Cashier / Personnel must also be assigned to one store.</p><div id="mcloiUserList"><small>Loading users...</small></div>';
-  admin.appendChild(card);
+ const admin=document.getElementById('admin');if(!admin||document.getElementById('mcloiUserAccessCard'))return;
+ const card=document.createElement('div');card.className='card';card.id='mcloiUserAccessCard';
+ card.innerHTML='<h2>Users & Store Assignments</h2>'
+  +'<p class="muted">When a cashier leaves, select <b>Deactivate Account</b> before assigning their replacement. Deactivated staff cannot access online store records. Past sales, purchases, and remittances remain intact. Each new cashier must register using their own account.</p>'
+  +'<div id="mcloiUserSummary" class="viewer-note" style="margin-bottom:10px">Loading users...</div>'
+  +'<div id="mcloiUserList"><small>Loading users...</small></div>';
+ admin.appendChild(card);
 }
 async function renderUserManagement(){
-  if(currentRole!=='admin')return; ensureUserManagementCard(); const el=document.getElementById('mcloiUserList');
-  const {data,error}=await mcloiDb.from('mcloi_profiles').select('user_id,display_name,role,assigned_store_id,active,created_at').order('created_at',{ascending:true});
-  if(error){el.innerHTML='<small>Could not load users: '+cleanError(error)+'</small>';return;}
-  if(!data?.length){el.innerHTML='<small>No registered McLoi users yet.</small>';return;}
-  el.innerHTML=data.map(u=>`<div class="tx"><b>${u.display_name||'User'}</b><small>${u.role.toUpperCase()}${u.assigned_store_id?' • '+(prototypeStores.find(s=>s.id===u.assigned_store_id)?.name||u.assigned_store_id):''}</small><div class="grid" style="margin-top:8px"><div><label>Role</label><select id="role_${u.user_id}"><option value="pending" ${u.role==='pending'?'selected':''}>Pending</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option><option value="bookkeeper" ${u.role==='bookkeeper'?'selected':''}>Main Cashier / Bookkeeper</option><option value="personnel" ${u.role==='personnel'?'selected':''}>Store Cashier / Personnel</option><option value="viewer" ${u.role==='viewer'?'selected':''}>Family Viewer</option></select></div><div><label>Assigned Store</label><select id="store_${u.user_id}"><option value="">All / Not applicable</option>${prototypeStores.map(s=>`<option value="${s.id}" ${u.assigned_store_id===s.id?'selected':''}>${s.name}</option>`).join('')}</select></div></div><button style="margin-top:8px" onclick="updateUserAccess('${u.user_id}')">Save Access</button></div>`).join('');
+ if(currentRole!=='admin')return;
+ ensureUserManagementCard();
+ const list=document.getElementById('mcloiUserList');
+ const {data,error}=await mcloiDb.from('mcloi_profiles').select('user_id,display_name,role,assigned_store_id,active,created_at').order('created_at',{ascending:true});
+ if(error){list.textContent='Could not load users: '+cleanError(error);return;}
+ const rows=data||[],active=rows.filter(u=>u.active).length;
+ const summary=document.getElementById('mcloiUserSummary');
+ if(summary)summary.textContent=active+' active account(s) • '+(rows.length-active)+' deactivated';
+ if(!rows.length){list.textContent='No registered users yet.';return;}
+ list.innerHTML=rows.map(u=>{
+  const id=u.user_id,ownAccount=id===mcloiSessionUser?.id,activeUser=!!u.active;
+  const name=safeReviewText(u.display_name||'User');
+  const storeName=prototypeStores.find(x=>x.id===u.assigned_store_id)?.name||u.assigned_store_id||'Not assigned';
+  const roleLabel=(u.role||'pending').toUpperCase();
+  const status=activeUser?'ACTIVE':'DEACTIVATED';
+  const button=activeUser
+   ?'<button type="button" class="danger" style="margin-top:8px" onclick="deactivateFuelUser(\''+id+'\')" '+(ownAccount?'disabled title="Your own admin account cannot be deactivated here"':'')+'>Deactivate Account</button>'
+   :'<button type="button" class="secondary" style="margin-top:8px" onclick="reactivateFuelUser(\''+id+'\')">Reactivate Account</button>';
+  const opts=[['pending','Pending'],['admin','Admin'],['bookkeeper','Main Cashier / Bookkeeper'],['personnel','Store Cashier / Personnel'],['viewer','Family Viewer']]
+   .map(([value,label])=>'<option value="'+value+'" '+(u.role===value?'selected':'')+'>'+label+'</option>').join('');
+  const stores=prototypeStores.map(st=>'<option value="'+safeReviewText(st.id)+'" '+(u.assigned_store_id===st.id?'selected':'')+'>'+safeReviewText(st.name)+'</option>').join('');
+  return '<div class="tx"><b>'+name+'</b>'
+   +'<small>'+status+' • '+safeReviewText(roleLabel)+' • '+safeReviewText(storeName)+(ownAccount?' • YOUR ACCOUNT':'')+'</small>'
+   +'<div class="grid" style="margin-top:8px"><div><label>Role</label><select id="role_'+id+'" '+(!activeUser?'disabled':'')+'>'+opts+'</select></div>'
+   +'<div><label>Assigned Store</label><select id="store_'+id+'" '+(!activeUser?'disabled':'')+'><option value="">All / Not applicable</option>'+stores+'</select></div></div>'
+   +'<button type="button" style="margin-top:8px" onclick="updateUserAccess(\''+id+'\')" '+(!activeUser?'disabled':'')+'>Save Role & Store Assignment</button>'
+   +button+'</div>';
+ }).join('');
 }
 window.updateUserAccess=async function(userId){
-  if(currentRole!=='admin')return; const role=document.getElementById('role_'+userId).value; let store=document.getElementById('store_'+userId).value||null;
-  if(role==='personnel'&&!store){alert('Assign a store to Store Cashier / Personnel.');return;} if(role!=='personnel')store=null;
-  const {error}=await mcloiDb.from('mcloi_profiles').update({role,assigned_store_id:store,active:true}).eq('user_id',userId); if(error){alert('Access update failed: '+cleanError(error));return;} alert('User access updated.'); await renderUserManagement();
+ if(currentRole!=='admin'||!mcloiSessionUser)return;
+ const role=document.getElementById('role_'+userId)?.value;
+ let store=document.getElementById('store_'+userId)?.value||null;
+ if(role==='personnel'&&!store){alert('Assign a store to this Store Cashier / Personnel first.');return;}
+ if(role!=='personnel')store=null;
+ if(userId===mcloiSessionUser.id&&role!=='admin'){alert('You cannot demote your own Admin account. Have another Admin make this change.');return;}
+ const {data:profile,error:readError}=await mcloiDb.from('mcloi_profiles').select('active').eq('user_id',userId).maybeSingle();
+ if(readError||!profile){alert('Could not verify this user. Refresh the Admin list and try again.');return;}
+ if(!profile.active){alert('This account is deactivated. Reactivate it explicitly before changing its assignment.');return;}
+ const {data,error}=await mcloiDb.from('mcloi_profiles').update({role,assigned_store_id:store}).eq('user_id',userId).eq('active',true).select('user_id').maybeSingle();
+ if(error||!data){alert('Access update failed or account has changed. '+(error?cleanError(error):''));return;}
+ alert('Role and store assignment saved.');await renderUserManagement();
 };
-
+window.deactivateFuelUser=async function(userId){
+ if(currentRole!=='admin'||!mcloiSessionUser)return;
+ if(userId===mcloiSessionUser.id){alert('You cannot deactivate your own Admin account.');return;}
+ const {data:profile,error:readError}=await mcloiDb.from('mcloi_profiles').select('user_id,display_name,active,role,assigned_store_id').eq('user_id',userId).maybeSingle();
+ if(readError||!profile){alert('Could not find the account. Refresh the Admin page.');return;}
+ if(!profile.active){alert('This account is already deactivated.');return;}
+ const store=prototypeStores.find(st=>st.id===profile.assigned_store_id)?.name||profile.assigned_store_id||'unassigned';
+ if(!confirm('DEACTIVATE '+(profile.display_name||'this account')+'?\nRole: '+profile.role+'\nStore: '+store+'\n\nThis prevents access to online McLoi records. Existing sales and remittances will NOT be deleted.'))return;
+ const {data,error}=await mcloiDb.from('mcloi_profiles').update({active:false}).eq('user_id',userId).eq('active',true).select('user_id').maybeSingle();
+ if(error||!data){alert('Could not deactivate the account. '+(error?cleanError(error):'Refresh and try again.'));return;}
+ alert('Account deactivated. Its historical records remain available to Admin.');await renderUserManagement();
+};
+window.reactivateFuelUser=async function(userId){
+ if(currentRole!=='admin'||!mcloiSessionUser)return;
+ const {data:profile,error:readError}=await mcloiDb.from('mcloi_profiles').select('user_id,display_name,active,role,assigned_store_id').eq('user_id',userId).maybeSingle();
+ if(readError||!profile){alert('Could not find the account. Refresh the Admin page.');return;}
+ if(profile.active){alert('This account is already active.');return;}
+ const assigned=profile.assigned_store_id||'no assigned store';
+ if(!confirm('REACTIVATE '+(profile.display_name||'this account')+'?\n\nThe saved role '+profile.role+' and store '+assigned+' will become active again. Recheck those assignments after reactivation.'))return;
+ const {data,error}=await mcloiDb.from('mcloi_profiles').update({active:true}).eq('user_id',userId).eq('active',false).select('user_id').maybeSingle();
+ if(error||!data){alert('Could not reactivate the account. '+(error?cleanError(error):'Refresh and try again.'));return;}
+ alert('Account reactivated. Please verify the role and assigned store.');await renderUserManagement();
+};
 
 let mcloiBookkeeperAutosaveTimer=null;
 let mcloiBookkeeperDraftLoading=false;
