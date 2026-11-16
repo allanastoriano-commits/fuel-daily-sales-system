@@ -53,6 +53,7 @@ button.secondary{background:#e9eef2;color:#17212b}.fuel{border-left:6px solid #7
 .photo{max-width:100%;max-height:240px;border-radius:10px;margin-top:8px;display:none}
 nav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);z-index:6}
 nav button{border-radius:0;background:#fff;color:#34424f;font-size:12px;padding:11px 4px} nav button.active{color:var(--accent);background:#edf2f6}
+@media(max-width:520px){header{position:relative}.storebar{top:0}}
 small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:#fafbfc}.tx b{display:block}.tx small{display:block;margin-top:3px}.mini{width:auto;padding:7px 10px;font-size:12px;margin-top:7px;background:#9f2d2d} table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left}
 .total{font-size:25px;font-weight:900}.danger{background:#9f2d2d}
 </style>
@@ -146,14 +147,25 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
   <p><small>Fuel purchases are recorded separately from ordinary expenses because they affect both cash and fuel inventory.</small></p>
   <div class="grid">
    <div><label>Fuel Type</label><select id="deliveryFuel"><option>Regular</option><option>Premium</option><option>Diesel</option></select></div>
-   <div><label>Supplier</label><input id="deliverySupplier" list="supplierOptions" value="FUEL CENTRAL" placeholder="Select or type supplier name"><datalist id="supplierOptions"><option value="FUEL CENTRAL"></option><option value="TYB"></option><option value="DJ Gasoline Station"></option></datalist><small class="muted">Choose Fuel Central, TYB, DJ Gasoline Station, or type another supplier. Saved suppliers remain available across authorized devices.</small></div>
+   <div><label for="deliverySupplier">Supplier — tap to select</label>
+<select id="deliverySupplier" onchange="toggleOtherSupplier()">
+<option value="FUEL CENTRAL">Fuel Central</option>
+<option value="TYB">TYB</option>
+<option value="DJ Gasoline Station">DJ Gasoline Station</option>
+<option value="__other__">+ Add Other Supplier</option>
+</select>
+<small class="muted">Tap the list to choose your supplier. No typing needed for the three regular suppliers.</small>
+<div id="otherSupplierFields" class="hidden" style="margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:10px">
+<label for="otherSupplierName">Name of New Supplier</label><input id="otherSupplierName" placeholder="Type the supplier name" autocomplete="off">
+<button type="button" class="secondary" style="margin-top:10px" onclick="addNewSupplier()">Save New Supplier</button>
+<span id="supplierSaveStatus" style="display:block;margin-top:8px;font-size:13px" aria-live="polite"></span>
+</div></div>
    <div><label>Liters Delivered</label><input id="deliveryLiters" type="number" step="0.01" inputmode="decimal"></div>
    <div><label>Cost per Liter (₱)</label><input id="deliveryCost" type="number" step="0.01" inputmode="decimal"></div>
    <div><label>Payment Status / Source</label><select id="deliveryPayment"><option>Paid - Cash</option><option value="Paid - Owner's Personal Cash">Paid - Owner's Personal Cash</option><option>Paid - GCash/Bank</option><option>Supplier Credit / Payable</option></select></div>
    <div><label>Receipt / Reference</label><input id="deliveryRef" placeholder="Optional reference"></div>
    <div><label>Receipt Photo</label><input id="deliveryPhoto" type="file" accept="image/*" capture="environment"></div>
   </div>
-  <div style="margin-top:10px"><button type="button" class="secondary" onclick="addNewSupplier()">Save New Supplier</button><span id="supplierSaveStatus" style="margin-left:8px;font-size:13px" aria-live="polite"></span></div>
   <div style="margin-top:10px"><button onclick="addDelivery()">Add Fuel Delivery</button></div><small class="muted">Added deliveries are automatically saved to the online draft. New suppliers can be saved online for future use.</small>
   <div id="deliveryList"></div>
   <div class="row3" style="margin-top:12px">
@@ -751,13 +763,25 @@ function supplierList(){
  return [...new Map(names.filter(Boolean).map(name=>[name.toLocaleLowerCase('en-PH'),name])).values()];
 }
 function refreshSupplierOptions(){
- const list=document.getElementById('supplierOptions');
- if(list){
-  list.replaceChildren();
-  supplierList().forEach(name=>{const option=document.createElement('option');option.value=name;list.appendChild(option);});
- }
- const field=document.getElementById('deliverySupplier');if(field&&!field.value)field.value='FUEL CENTRAL';
+ const field=document.getElementById('deliverySupplier');
+ if(!field)return;
+ const selected=field.value;
+ field.replaceChildren();
+ supplierList().forEach(name=>{
+  const option=document.createElement('option');option.value=name;
+  option.textContent=name==='FUEL CENTRAL'?'Fuel Central':name;
+  field.appendChild(option);
+ });
+ const other=document.createElement('option');other.value='__other__';other.textContent='+ Add Other Supplier';
+ field.appendChild(other);
+ field.value=[...field.options].some(option=>option.value===selected)?selected:'FUEL CENTRAL';
+ toggleOtherSupplier();
 }
+window.toggleOtherSupplier=function(){
+ const selector=document.getElementById('deliverySupplier');
+ const box=document.getElementById('otherSupplierFields');
+ if(box)box.classList.toggle('hidden',selector?.value!=='__other__');
+};
 async function loadOnlineSuppliers(){
  const key=currentStore,local=storedSupplierNames();
  supplierCacheByStore[key]=[...STANDARD_FUEL_SUPPLIERS,...local];
@@ -789,20 +813,36 @@ async function rememberSupplier(raw){
 }
 window.addNewSupplier=async function(){
  if(!(currentRole==='admin'||currentRole==='personnel')){alert('Only Admin or Store Cashier can add suppliers.');return;}
- const field=document.getElementById('deliverySupplier');
+ const input=document.getElementById('otherSupplierName');
  const status=document.getElementById('supplierSaveStatus');
- const name=normalizeSupplierName(field?.value);
+ const name=normalizeSupplierName(input?.value);
  const result=await rememberSupplier(name);
  if(status){status.textContent=result.message;status.style.color=result.ok?'#18794e':'#a94442';}
- if(result.ok&&field)field.value=result.name;
+ if(result.ok){
+  refreshSupplierOptions();
+  const field=document.getElementById('deliverySupplier');if(field)field.value=result.name;
+  toggleOtherSupplier();
+  if(input)input.value='';
+ }
 };
-function addDelivery(){
- const liters=Number(deliveryLiters.value||0), cost=Number(deliveryCost.value||0);
- const supplier=(deliverySupplier.value||'FUEL CENTRAL').trim()||'FUEL CENTRAL';
- if(liters<=0){alert('Enter liters delivered.');return}
- rememberSupplier(supplier).then(result=>{if(!result.ok){const st=document.getElementById('supplierSaveStatus');if(st){st.textContent=result.message;st.style.color='#a94442';}}});
- deliveries.push({id:'D'+Date.now(),fuel:deliveryFuel.value,supplier:supplier,liters,costPerLiter:cost,totalCost:liters*cost,payment:deliveryPayment.value,reference:deliveryRef.value.trim(),photoAttached:deliveryPhoto.files.length>0,time:new Date().toISOString(),supplierPayments:[]});
- deliverySupplier.value='FUEL CENTRAL';deliveryLiters.value='';deliveryCost.value='';deliveryRef.value='';deliveryPhoto.value='';
+async function addDelivery(){
+ const liters=Number(deliveryLiters.value||0),cost=Number(deliveryCost.value||0);
+ if(!Number.isFinite(liters)||liters<=0){alert('Enter a valid positive number of liters delivered.');return;}
+ if(!Number.isFinite(cost)||cost<0){alert('Enter a valid nonnegative cost per liter.');return;}
+ const field=document.getElementById('deliverySupplier');
+ let supplier=field?.value||'';
+ if(supplier==='__other__'){
+  const name=normalizeSupplierName(document.getElementById('otherSupplierName').value);
+  if(name.length<2){alert('Enter the new supplier name.');return;}
+  const result=await rememberSupplier(name);
+  if(!result.ok){alert(result.message+' The purchase has not been added.');return;}
+  supplier=result.name;
+ }
+ if(!supplier){alert('Select a fuel supplier.');return;}
+ deliveries.push({id:'D'+Date.now(),fuel:deliveryFuel.value,supplier,liters,costPerLiter:cost,totalCost:Math.round(liters*cost*100)/100,payment:deliveryPayment.value,reference:deliveryRef.value.trim(),photoAttached:deliveryPhoto.files.length>0,time:new Date().toISOString(),supplierPayments:[]});
+ refreshSupplierOptions();field.value='FUEL CENTRAL';toggleOtherSupplier();
+ const otherName=document.getElementById('otherSupplierName');if(otherName)otherName.value='';
+ deliveryLiters.value='';deliveryCost.value='';deliveryRef.value='';deliveryPhoto.value='';
  renderDeliveries();inventoryCalc();
  if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0);
 }
