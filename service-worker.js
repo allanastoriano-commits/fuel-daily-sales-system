@@ -1,4 +1,4 @@
-const CACHE_NAME='fuel-daily-sales-v11-liter-totalizer-sales';
+const CACHE_NAME='fuel-daily-sales-v12-suppliers-cash-counter';
 const APP_SHELL=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png','./mcloi-preview.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)));
