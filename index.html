@@ -220,14 +220,16 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
    <div><label>Additional Cash In (₱)</label><input id="cashIn" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
    <div><label>Expenses / Cash Out (₱)</label><input id="expenses" type="number" step="0.01" inputmode="decimal" readonly></div>
    <div><label>Cash Withdrawal (₱)</label><input id="withdrawal" type="number" step="0.01" inputmode="decimal" readonly></div>
-   <div><label>Actual Cash Count (₱)</label><input id="actualCash" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>Actual Cash Count (₱)</label><input id="actualCash" readonly placeholder="Count bills and coins below"><small>Calculated automatically from closing denomination count</small></div>
   </div>
   <div class="grid" style="margin-top:12px">
-   <div><label>Expected Cash (after station-paid fuel & supplier cash payments)</label><input id="expectedCash" readonly></div>
+   <div><label>Expected Cash (including opening change fund, excluding owner-paid fuel)</label><input id="expectedCash" readonly></div>
    <div><label>Cash Over / Short</label><input id="cashVariance" readonly></div>
   </div>
   <div style="margin-top:10px"><label>Remarks / Explanation</label><textarea id="remarks" rows="3" placeholder="Explain any payment or cash discrepancy"></textarea></div>
  </div>
+ <div class="card" id="cashCountCard"><h2>Closing Cash Count — Bills and Coins</h2><p class="muted">Count the drawer BEFORE giving cash to the Main Cashier. Include change money left in the drawer. Enter pieces per denomination.</p>
+<div class="grid"><div><label>Opening Change Fund (₱)</label><input id="openingCashFloat" type="number" min="0" step="0.01" inputmode="decimal" oninput="updateCashCount()" placeholder="0.00"><small>Cash for change, not sales</small></div><div><label>Counted by (Cashier)</label><input id="cashCountBy" oninput="updateCashCount()" placeholder="Cashier name"></div></div><h3 style="margin-top:14px">Peso Bills</h3><div class="grid"><div><label>₱1,000 — Pieces</label><input id="cashQty_1000" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱500 — Pieces</label><input id="cashQty_500" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱200 — Pieces</label><input id="cashQty_200" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱100 — Pieces</label><input id="cashQty_100" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱50 — Pieces</label><input id="cashQty_50" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱20 bill — Pieces</label><input id="cashQty_20b" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div></div><h3 style="margin-top:14px">Peso Coins</h3><div class="grid"><div><label>₱20 coin — Pieces</label><input id="cashQty_20c" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱10 — Pieces</label><input id="cashQty_10" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱5 — Pieces</label><input id="cashQty_5" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱1 — Pieces</label><input id="cashQty_1" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱0.25 — Pieces</label><input id="cashQty_025" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱0.10 — Pieces</label><input id="cashQty_010" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱0.05 — Pieces</label><input id="cashQty_005" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱0.01 — Pieces</label><input id="cashQty_001" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div></div><div class="row3" style="margin-top:12px"><div class="metric"><b id="cashBillsTotal">₱0.00</b><span>BILLS</span></div><div class="metric"><b id="cashCoinsTotal">₱0.00</b><span>COINS</span></div><div class="metric"><b id="cashCountTotal">₱0.00</b><span>TOTAL CASH COUNTED</span></div></div><div id="cashCountStatus" class="muted" style="margin-top:10px" aria-live="polite">Not counted.</div><button type="button" class="secondary" style="margin-top:10px" onclick="confirmCashCount()">Confirm Cash Count</button></div>
  <div class="card">
   <h2>Daily Total</h2>
   <div class="row3"><div class="metric"><b id="totalAmount">₱0.00</b><span>SALES</span></div><div class="metric"><b id="totalLiters">0.00 L</b><span>LITERS SOLD</span></div><div class="metric"><b id="photoCount">0/3</b><span>PHOTOS</span></div></div>
@@ -663,19 +665,73 @@ function calc(){
   reconcile();inventoryCalc();
 }
 function salesTotal(){return roundFuel(fuels.reduce((sum,[k])=>sum+meterResult(k).sales,0));}
+const CASH_DENOMS=[{"id":"1000","cents":100000,"category":"Bills"},{"id":"500","cents":50000,"category":"Bills"},{"id":"200","cents":20000,"category":"Bills"},{"id":"100","cents":10000,"category":"Bills"},{"id":"50","cents":5000,"category":"Bills"},{"id":"20b","cents":2000,"category":"Bills"},{"id":"20c","cents":2000,"category":"Coins"},{"id":"10","cents":1000,"category":"Coins"},{"id":"5","cents":500,"category":"Coins"},{"id":"1","cents":100,"category":"Coins"},{"id":"025","cents":25,"category":"Coins"},{"id":"010","cents":10,"category":"Coins"},{"id":"005","cents":5,"category":"Coins"},{"id":"001","cents":1,"category":"Coins"}];
+let countedAndConfirmed=false,countConfirmedTime=null;
+function countedCash(){
+ let bills=0,coins=0,entered=false,invalid=false,counts={};
+ for(const d of CASH_DENOMS){
+  const raw=document.getElementById('cashQty_'+d.id).value.trim(),q=raw===''?0:Number(raw);
+  if(raw!=='')entered=true;
+  if(!Number.isSafeInteger(q)||q<0){invalid=true;continue;}
+  counts[d.id]=q;
+  if(d.category==='Bills')bills+=q*d.cents;else coins+=q*d.cents;
+ }
+ const rawFloat=document.getElementById('openingCashFloat').value.trim();
+ const openingFloat=rawFloat===''?0:Number(rawFloat);
+ if(!Number.isFinite(openingFloat)||openingFloat<0||!Number.isSafeInteger(bills+coins))invalid=true;
+ return {counts,entered,invalid,bills:bills/100,coins:coins/100,total:(bills+coins)/100,openingFloat};
+}
+function cashCountSnapshot(){
+ const n=countedCash();return {denominations:n.counts,bills:n.bills,coins:n.coins,total:n.total,
+ openingFloat:n.openingFloat,countedBy:document.getElementById('cashCountBy').value.trim(),
+ entered:n.entered,confirmed:countedAndConfirmed&&!n.invalid&&n.entered,confirmedAt:countConfirmedTime};
+}
+function refreshCashCount(){
+ const n=countedCash();
+ document.getElementById('cashBillsTotal').textContent=peso(n.bills);
+ document.getElementById('cashCoinsTotal').textContent=peso(n.coins);
+ document.getElementById('cashCountTotal').textContent=peso(n.total);
+ document.getElementById('actualCash').value=n.entered&&!n.invalid?n.total.toFixed(2):'';
+ document.getElementById('cashCountStatus').textContent=n.invalid?'Invalid counts: only nonnegative whole pieces are accepted.':
+ countedAndConfirmed?'Confirmed count '+peso(n.total)+' by '+document.getElementById('cashCountBy').value:
+ n.entered?'Counted '+peso(n.total)+' — confirmation required.':'Cash count not yet recorded.';
+ reconcile();
+}
+window.updateCashCount=function(){countedAndConfirmed=false;countConfirmedTime=null;refreshCashCount();if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(900);};
+window.confirmCashCount=function(){
+ if(!(currentRole==='admin'||currentRole==='personnel')){alert('Cashier or Admin access required.');return;}
+ const n=countedCash();if(n.invalid||!n.entered){alert('Enter valid bill and coin quantities before confirming.');return;}
+ if(!document.getElementById('cashCountBy').value.trim()){alert('Enter cashier name.');return;}
+ countedAndConfirmed=true;countConfirmedTime=new Date().toISOString();refreshCashCount();
+ if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0);
+};
+function clearCashCount(){
+ countedAndConfirmed=false;countConfirmedTime=null;
+ CASH_DENOMS.forEach(d=>{document.getElementById('cashQty_'+d.id).value='';});
+ document.getElementById('openingCashFloat').value='';document.getElementById('cashCountBy').value='';refreshCashCount();
+}
+function loadCashCount(r){
+ clearCashCount();if(!r?.cashCount)return;
+ const x=r.cashCount;CASH_DENOMS.forEach(d=>{const v=x.denominations?.[d.id];document.getElementById('cashQty_'+d.id).value=v===undefined?'':String(v);});
+ document.getElementById('openingCashFloat').value=x.openingFloat??'';
+ document.getElementById('cashCountBy').value=x.countedBy||'';
+ const n=countedCash();countedAndConfirmed=!!x.confirmed&&n.entered&&!n.invalid&&Math.abs(Number(x.total)-n.total)<.005;
+ countConfirmedTime=countedAndConfirmed?x.confirmedAt||null:null;refreshCashCount();
+}
+
 function reconcile(){
  const disp=salesTotal();
  const payments=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales');
  const diff=payments-disp;
  const fuelCash=deliveries.filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
  const supplierCash=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
- const expected=val('cashSales')+val('cashIn')-val('expenses')-val('withdrawal')-fuelCash-supplierCash;
- const variance=val('actualCash')-expected;
+ const expected=val('cashSales')+val('cashIn')+countedCash().openingFloat-val('expenses')-val('withdrawal')-fuelCash-supplierCash;
+ const variance=countedAndConfirmed?roundFuel(countedCash().total-expected):null;
  document.getElementById('paymentsTotal').textContent=peso(payments);
  document.getElementById('dispenserTotal').textContent=peso(disp);
  document.getElementById('salesDiff').textContent=(diff>0?'+':'')+peso(diff);
  document.getElementById('expectedCash').value=peso(expected);
- document.getElementById('cashVariance').value=(variance>0?'+':'')+peso(variance);
+ document.getElementById('cashVariance').value=variance===null?'Pending confirmed count':(variance>0?'+':'')+peso(variance);
  const w=document.getElementById('paymentWarning');
  if(Math.abs(diff)>0.009) w.innerHTML='<div style="font-size:13px;padding:10px;border-radius:10px;background:#fff3e8;color:#9a4b00;margin-top:10px"><b>Check:</b> Payment total does not equal dispenser sales. Difference: '+(diff>0?'+':'')+peso(diff)+'</div>';
  else if(disp>0) w.innerHTML='<div class="status">Payments reconcile with dispenser sales.</div>';
@@ -841,7 +897,7 @@ function getRecord(){
     financial:{cashSales:val('cashSales'),gcashSales:val('gcashSales'),creditSales:val('creditSales'),otherSales:val('otherSales'),
       cashIn:val('cashIn'),expenses:val('expenses'),withdrawal:val('withdrawal'),actualCash:val('actualCash'),
       remarks:document.getElementById('remarks').value},
-    deliveries,transactions,inventory:{}};
+    deliveries,transactions,inventory:{},cashCount:cashCountSnapshot()};
   fuels.forEach(([k,n])=>{
     const result=meterResult(k),entered=hasMeterReading(k,'OL')||hasMeterReading(k,'CL');
     record.fuels[k]={name:n,openingLiters:hasMeterReading(k,'OL')?val(k+'OL'):null,
@@ -1198,6 +1254,7 @@ function clearRecordForm(){
     const file=document.getElementById(k+'Photo');if(file)file.value='';
   });
   ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  clearCashCount();
   document.getElementById('remarks').value='';
   deliveries=[];transactions=[];renderDeliveries();renderTransactions();syncCashOut();updatePhotoCount();calc();
 }
@@ -1215,7 +1272,8 @@ function applyRecordToForm(record){
     document.getElementById(k+'ActualStock').value=inv.actualEnding??'';
   });
   const finance=record.financial||{};
-  ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{document.getElementById(id).value=finance[id]??'';});
+  ['cashSales','gcashSales','creditSales','otherSales','cashIn'].forEach(id=>{document.getElementById(id).value=finance[id]??'';});
+  loadCashCount(record);
   document.getElementById('remarks').value=finance.remarks||'';
   deliveries=Array.isArray(record.deliveries)?record.deliveries:[];
   transactions=Array.isArray(record.transactions)?record.transactions:[];
@@ -1299,8 +1357,9 @@ function recordTotals(r){
   // Only fuel paid using station cashier funds is deducted; owner-funded stock is tracked separately.
   const fuelCash=(r.deliveries||[]).filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
   const supplierCash=(r.deliveries||[]).reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
-  const expected=Number(r.financial?.cashSales||0)+Number(r.financial?.cashIn||0)-Number(r.financial?.expenses||0)-Number(r.financial?.withdrawal||0)-fuelCash-supplierCash;
-  const actual=Number(r.financial?.actualCash||0); return {totalSales,totalLiters,expected,actual,variance:actual-expected};
+  const count=r.cashCount;
+  const expected=Number(r.financial?.cashSales||0)+Number(r.financial?.cashIn||0)+Number(count?.openingFloat||0)-Number(r.financial?.expenses||0)-Number(r.financial?.withdrawal||0)-fuelCash-supplierCash;
+  const actual=count?.confirmed?Number(count.total||0):0;return {totalSales,totalLiters,expected,actual,variance:count?.confirmed?roundFuel(actual-expected):0};
 }
 
 window.saveDraft=async function(options={}){
@@ -1403,6 +1462,7 @@ window.closeDay=async function(){
   }
   const missing=fuels.filter(([k])=>!document.getElementById(k+'Photo').files.length); if(missing.length && !confirm('One or more closing dispenser photos are missing. Close the day anyway?'))return;
   const disp=salesTotal(),pay=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales'); if(Math.abs(pay-disp)>0.009&&!document.getElementById('remarks').value.trim()){alert('Payment total does not match dispenser sales. Enter a remarks/explanation before closing.');return;}
+  if(!r.cashCount?.confirmed){alert('Count and confirm all cash denominations before closing.');return;}
   const t=recordTotals(r); if(Math.abs(t.variance)>0.009&&!document.getElementById('remarks').value.trim()){alert('There is a cash over/short amount. Enter a remarks/explanation before closing.');return;}
   if(!confirm('Close and lock this daily record online?'))return;
   try{ await uploadClosingPhotos(r); }catch(e){ if(!confirm('One or more photos could not be uploaded: '+cleanError(e)+'\nClose the record without the failed photo upload?'))return; }
