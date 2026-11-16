@@ -112,7 +112,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
    <div class="metric"><b id="dDash">₱0</b><span>DIESEL</span></div>
   </div>
  </div>
- <div class="card"><h2>Daily Flow</h2><p>1. Record opening totalizers.<br>2. At closing, photograph each dispenser and enter closing readings.<br>3. The app calculates pesos and liters sold.<br>4. Review and close the day.</p>
+ <div class="card"><h2>Daily Flow</h2><p>1. At opening, record LITER totalizers only.<br>2. At closing, record the closing LITER totalizers and take photos.<br>3. Sales are calculated: liters sold × the saved fuel selling price.<br>4. Reconcile receipts and expenses before closing the day.</p>
  <button id="dashboardAction" onclick="showPage('record')">Start / Continue Today's Record</button></div>
 </section>
 
@@ -210,7 +210,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
   </div>
   <div style="margin-top:12px" class="row3">
    <div class="metric"><b id="paymentsTotal">₱0.00</b><span>TOTAL PAYMENTS</span></div>
-   <div class="metric"><b id="dispenserTotal">₱0.00</b><span>DISPENSER SALES</span></div>
+   <div class="metric"><b id="dispenserTotal">₱0.00</b><span>CALCULATED FUEL SALES</span></div>
    <div class="metric"><b id="salesDiff">₱0.00</b><span>DIFFERENCE</span></div>
   </div>
   <div id="paymentWarning"></div>
@@ -596,37 +596,72 @@ function setAutomaticDate(force=false){const el=document.getElementById('date');
 function configureDateAccess(){const el=document.getElementById('date');if(!el)return;el.readOnly=currentRole!=='admin';const help=document.getElementById('dateHelp');if(help)help.textContent=currentRole==='admin'?'Date is automatic. Admin may correct it when necessary.':'Date is automatic and cannot be changed by this user.';}
 setAutomaticDate(true);
 
-function fuelHTML(k,n){return `<div class="card fuel"><h3>${n}</h3>
-<div class="grid"><div><label>Opening Amount Totalizer (₱)</label><input inputmode="decimal" id="${k}OA" type="number" step="0.01" oninput="calc()"></div>
-<div><label>Opening Liter Totalizer (L)</label><input inputmode="decimal" id="${k}OL" type="number" step="0.01" oninput="calc()"></div>
-<div><label>Closing Amount Totalizer (₱)</label><input inputmode="decimal" id="${k}CA" type="number" step="0.01" oninput="calc()"></div>
-<div><label>Closing Liter Totalizer (L)</label><input inputmode="decimal" id="${k}CL" type="number" step="0.01" oninput="calc()"></div></div>
-<div class="grid" style="margin-top:10px"><div><label>Calculated Sales</label><input id="${k}Sales" readonly></div><div><label>Calculated Liters Sold</label><input id="${k}Liters" readonly></div></div>
-<div style="margin-top:10px"><label>Closing Dispenser Photo</label><input id="${k}Photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto('${k}',this)"><img class="photo" id="${k}Preview"></div></div>`}
+function fuelHTML(k,n){
+  return '<div class="card fuel"><h3>'+n+'</h3>'
+   +'<div class="metric" style="text-align:left;margin-bottom:10px"><span>OFFICIAL SELLING PRICE FOR THIS RECORD</span><b id="'+k+'Price" style="font-size:22px">₱0.00 / L</b><div id="'+k+'PriceNote" style="font-size:12px;color:#65727e">Official store price</div></div>'
+   +'<div class="grid"><div><label>Opening LITER Totalizer (L)</label><input id="'+k+'OL" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Morning liter reading" oninput="calc()"></div>'
+   +'<div><label>Closing LITER Totalizer (L)</label><input id="'+k+'CL" type="number" min="0" step="0.01" inputmode="decimal" placeholder="End-of-day liter reading" oninput="calc()"></div></div>'
+   +'<div class="grid" style="margin-top:10px"><div><label>Liters Sold — Auto</label><input id="'+k+'Liters" readonly></div><div><label>Total Sales (₱) — Auto</label><input id="'+k+'Sales" readonly></div></div>'
+   +'<div id="'+k+'MeterStatus" style="margin-top:8px;font-size:13px;color:#65727e">Enter both liter readings.</div>'
+   +'<div style="margin-top:10px"><label>Closing Dispenser Photo</label><input id="'+k+'Photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto(\''+k+'\',this)"><img class="photo" id="'+k+'Preview"></div></div>';
+}
 document.getElementById('fuelCards').innerHTML=fuels.map(x=>fuelHTML(...x)).join('');
+document.getElementById('fuelCards').insertAdjacentHTML('beforebegin','<div class="viewer-note" style="margin-bottom:10px">Enter ONLY opening and closing LITER totalizers. The system multiplies liters sold by the official selling price. If a price changes during the day, use separate meter readings for each price period.</div><div id="meterWarning" style="margin-bottom:10px"></div>');
 document.getElementById('inventoryRows').innerHTML=fuels.map(([k,n])=>`<div class="card" style="box-shadow:none;margin-bottom:8px"><b>${n}</b><div class="grid" style="margin-top:8px"><div><label>Beginning Stock (L)</label><input id="${k}BeginStock" type="number" step="0.01" inputmode="decimal" oninput="inventoryCalc()"></div><div><label>Actual Ending Stock (L)</label><input id="${k}ActualStock" type="number" step="0.01" inputmode="decimal" oninput="inventoryCalc()"></div><div><label>Expected Ending Stock</label><input id="${k}ExpectedStock" readonly></div><div><label>Inventory Variance</label><input id="${k}StockVariance" readonly></div></div></div>`).join('');
 const OWNER_FUNDED_PAYMENT="Paid - Owner's Personal Cash";
 let deliveries=[], transactions=[];
 
 
 function val(id){return Number(document.getElementById(id).value||0)}
+// A per-day price snapshot prevents later official price changes from silently repricing saved meter sales.
+let dailyFuelPriceSnapshot={};
+function roundFuel(x){return Math.round((Number(x)+Number.EPSILON)*100)/100;}
+function hasMeterReading(k,s){return document.getElementById(k+s).value.trim()!=='';}
+function appliedFuelPrice(k){
+  const saved=Number(dailyFuelPriceSnapshot[k]||0);
+  if(Number.isFinite(saved)&&saved>0)return saved;
+  const current=Number(getStorePrices()[k]||0);
+  if(Number.isFinite(current)&&current>0 && (hasMeterReading(k,'OL')||hasMeterReading(k,'CL'))) dailyFuelPriceSnapshot[k]=current;
+  return Number.isFinite(current)&&current>0?current:0;
+}
+function meterResult(k){
+  const hasOpen=hasMeterReading(k,'OL'),hasClose=hasMeterReading(k,'CL'),price=appliedFuelPrice(k);
+  if(!hasOpen&&!hasClose)return {complete:false,invalid:false,liters:0,sales:0,price,reason:'Enter opening and closing readings.'};
+  if(!hasOpen||!hasClose)return {complete:false,invalid:false,liters:0,sales:0,price,reason:'Awaiting the other liter reading.'};
+  const opening=val(k+'OL'),closing=val(k+'CL');
+  if(!Number.isFinite(opening)||!Number.isFinite(closing)||opening<0||closing<0)return {complete:false,invalid:true,liters:0,sales:0,price,reason:'Readings must be valid non-negative numbers.'};
+  if(closing<opening)return {complete:false,invalid:true,liters:0,sales:0,price,reason:'Closing totalizer is below opening. Check for a reset or entry error.'};
+  const liters=roundFuel(closing-opening);
+  if(price<=0)return {complete:false,invalid:true,liters,sales:0,price,reason:'Official selling price must be greater than zero.'};
+  return {complete:true,invalid:false,liters,sales:roundFuel(liters*price),price,reason:'Liters × saved price.'};
+}
 function calc(){
- let ta=0,tl=0;
- fuels.forEach(([k])=>{
-  let a=Math.max(0,val(k+'CA')-val(k+'OA')), l=Math.max(0,val(k+'CL')-val(k+'OL'));
-  document.getElementById(k+'Sales').value=peso(a); document.getElementById(k+'Liters').value=l.toFixed(2)+' L'; ta+=a;tl+=l;
- });
- document.getElementById('totalAmount').textContent=peso(ta);document.getElementById('totalLiters').textContent=tl.toFixed(2)+' L';
- document.getElementById('grandTotal').textContent=peso(ta);
- document.getElementById('rDash').textContent=peso(Math.max(0,val('regularCA')-val('regularOA')));
- document.getElementById('pDash').textContent=peso(Math.max(0,val('premiumCA')-val('premiumOA')));
- document.getElementById('dDash').textContent=peso(Math.max(0,val('dieselCA')-val('dieselOA')));
- reconcile();
- inventoryCalc();
+  let totalSales=0,totalLiters=0;const warnings=[];
+  fuels.forEach(([k,name])=>{
+    const result=meterResult(k),official=Number(getStorePrices()[k]||0);
+    const frozen=Number(dailyFuelPriceSnapshot[k]||0)>0;
+    const priceView=document.getElementById(k+'Price'),note=document.getElementById(k+'PriceNote');
+    if(priceView)priceView.textContent=result.price>0?peso(result.price)+' / L':'PRICE NOT SET';
+    if(note)note.textContent=frozen?'Saved rate for this business date':'Current official store rate';
+    const differs=frozen&&official>0&&Math.abs(official-result.price)>0.004;
+    const reason=differs?'Current official price differs from saved rate. Confirm whether the price changed during sales.':result.reason;
+    const status=document.getElementById(k+'MeterStatus');
+    if(status){status.textContent=reason;status.style.color=differs||result.invalid?'#9a4b00':'#65727e';}
+    if(result.invalid||differs)warnings.push(name+': '+reason);
+    document.getElementById(k+'Liters').value=result.complete?result.liters.toFixed(2)+' L':result.invalid?'Check reading':'Pending';
+    document.getElementById(k+'Sales').value=result.complete?peso(result.sales):result.invalid?'Check price / meter':'Pending';
+    const dash=document.getElementById(k==='regular'?'rDash':k==='premium'?'pDash':'dDash');
+    if(dash)dash.textContent=peso(result.sales);
+    if(result.complete){totalSales+=result.sales;totalLiters+=result.liters;}
+  });
+  const warn=document.getElementById('meterWarning');
+  if(warn){warn.textContent=warnings.join(' | ');warn.style.color='#9a4b00';warn.style.fontWeight='700';}
+  document.getElementById('totalAmount').textContent=peso(roundFuel(totalSales));
+  document.getElementById('totalLiters').textContent=roundFuel(totalLiters).toFixed(2)+' L';
+  document.getElementById('grandTotal').textContent=peso(roundFuel(totalSales));
+  reconcile();inventoryCalc();
 }
-function salesTotal(){
- return fuels.reduce((sum,[k])=>sum+Math.max(0,val(k+'CA')-val(k+'OA')),0);
-}
+function salesTotal(){return roundFuel(fuels.reduce((sum,[k])=>sum+meterResult(k).sales,0));}
 function reconcile(){
  const disp=salesTotal();
  const payments=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales');
@@ -743,14 +778,16 @@ function syncCashOut(){
  document.getElementById('expenses').value=exp||'';document.getElementById('withdrawal').value=wd||'';reconcile();
 }
 function inventoryCalc(){
- fuels.forEach(([k,n])=>{
-   const delivered=deliveries.filter(d=>d.fuel===n).reduce((a,d)=>a+d.liters,0);
-   const sold=Math.max(0,val(k+'CL')-val(k+'OL'));
-   const expected=val(k+'BeginStock')+delivered-sold;
-   const variance=val(k+'ActualStock')-expected;
-   document.getElementById(k+'ExpectedStock').value=expected.toFixed(2)+' L';
-   document.getElementById(k+'StockVariance').value=(variance>0?'+':'')+variance.toFixed(2)+' L';
- });
+  fuels.forEach(([k,n])=>{
+    const delivered=deliveries.filter(d=>d.fuel===n).reduce((a,d)=>a+Number(d.liters||0),0);
+    const sold=meterResult(k).liters;
+    const expected=roundFuel(val(k+'BeginStock')+delivered-sold);
+    const ending=document.getElementById(k+'ActualStock');
+    const measured=ending&&ending.value.trim()!=='';
+    const variance=measured?roundFuel(Number(ending.value)-expected):null;
+    document.getElementById(k+'ExpectedStock').value=expected.toFixed(2)+' L';
+    document.getElementById(k+'StockVariance').value=measured?(variance>0?'+':'')+variance.toFixed(2)+' L':'Pending physical count';
+  });
 }
 function previewPhoto(k,input){
  const img=document.getElementById(k+'Preview');
@@ -759,18 +796,27 @@ function previewPhoto(k,input){
 }
 function updatePhotoCount(){let c=fuels.filter(([k])=>document.getElementById(k+'Photo').files.length).length;document.getElementById('photoCount').textContent=c+'/3'}
 function getRecord(){
- if(!date.value)setAutomaticDate(true);
- let rec={date:date.value,user:user.value,closed:false,fuels:{},
- financial:{
- cashSales:val('cashSales'),gcashSales:val('gcashSales'),creditSales:val('creditSales'),otherSales:val('otherSales'),
- cashIn:val('cashIn'),expenses:val('expenses'),withdrawal:val('withdrawal'),actualCash:val('actualCash'),
- remarks:document.getElementById('remarks').value
- },deliveries:deliveries,transactions:transactions,inventory:{}};
- fuels.forEach(([k,n])=>{rec.fuels[k]={name:n,openingAmount:val(k+'OA'),openingLiters:val(k+'OL'),closingAmount:val(k+'CA'),closingLiters:val(k+'CL'),sales:Math.max(0,val(k+'CA')-val(k+'OA')),litersSold:Math.max(0,val(k+'CL')-val(k+'OL')),photoAttached:document.getElementById(k+'Photo').files.length>0};
- const delivered=deliveries.filter(d=>d.fuel===n).reduce((a,d)=>a+d.liters,0),expected=val(k+'BeginStock')+delivered-rec.fuels[k].litersSold;
- rec.inventory[k]={beginningStock:val(k+'BeginStock'),delivered,expectedEnding:expected,actualEnding:val(k+'ActualStock'),variance:val(k+'ActualStock')-expected};
- });
- return rec;
+  if(!date.value)setAutomaticDate(true);
+  const record={date:date.value,user:user.value,closed:false,calculationMode:'liter_totalizers_x_price',fuels:{},
+    financial:{cashSales:val('cashSales'),gcashSales:val('gcashSales'),creditSales:val('creditSales'),otherSales:val('otherSales'),
+      cashIn:val('cashIn'),expenses:val('expenses'),withdrawal:val('withdrawal'),actualCash:val('actualCash'),
+      remarks:document.getElementById('remarks').value},
+    deliveries,transactions,inventory:{}};
+  fuels.forEach(([k,n])=>{
+    const result=meterResult(k),entered=hasMeterReading(k,'OL')||hasMeterReading(k,'CL');
+    record.fuels[k]={name:n,openingLiters:hasMeterReading(k,'OL')?val(k+'OL'):null,
+      closingLiters:hasMeterReading(k,'CL')?val(k+'CL'):null,
+      openingAmount:0,closingAmount:0,unitPrice:entered?result.price:null,
+      litersSold:result.liters,sales:result.sales,calculationMode:'liter_totalizers_x_price',
+      photoAttached:document.getElementById(k+'Photo').files.length>0};
+    const delivered=deliveries.filter(d=>d.fuel===n).reduce((a,d)=>a+Number(d.liters||0),0);
+    const ended=document.getElementById(k+'ActualStock');
+    const actualEnding=ended.value.trim()===''?null:Number(ended.value);
+    const expected=roundFuel(val(k+'BeginStock')+delivered-result.liters);
+    record.inventory[k]={beginningStock:val(k+'BeginStock'),delivered,expectedEnding:expected,
+      actualEnding,variance:actualEnding===null?null:roundFuel(actualEnding-expected)};
+  });
+  return record;
 }
 function saveDraft(){localStorage.setItem('fuelDraft',JSON.stringify(getRecord()));document.getElementById('saveStatus').innerHTML='<div class="status">Draft saved on this device.</div>'}
 function closeDay(){
@@ -1055,6 +1101,7 @@ window.renderStorePrices=async function(){
   const ar=document.getElementById('adminPriceRegular'), ap=document.getElementById('adminPricePremium'), ad=document.getElementById('adminPriceDiesel');
   if(ar)ar.value=p.regular||''; if(ap)ap.value=p.premium||''; if(ad)ad.value=p.diesel||'';
   await loadDispenserVerification();
+  calc();
 };
 
 window.saveStorePrices=async function(){
@@ -1102,18 +1149,36 @@ window.saveDispenserVerification=async function(){
 };
 
 function clearRecordForm(){
-  fuels.forEach(([k])=>{['OA','OL','CA','CL','BeginStock','ActualStock'].forEach(s=>{const e=document.getElementById(k+s);if(e)e.value='';}); const img=document.getElementById(k+'Preview');if(img){img.src='';img.style.display='none';}});
-  ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  document.getElementById('remarks').value=''; deliveries=[]; transactions=[]; renderDeliveries();renderTransactions();syncCashOut();updatePhotoCount();calc();
+  dailyFuelPriceSnapshot={};
+  fuels.forEach(([k])=>{
+    ['OL','CL','BeginStock','ActualStock'].forEach(s=>{const el=document.getElementById(k+s);if(el)el.value='';});
+    const image=document.getElementById(k+'Preview');if(image){image.src='';image.style.display='none';}
+    const file=document.getElementById(k+'Photo');if(file)file.value='';
+  });
+  ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('remarks').value='';
+  deliveries=[];transactions=[];renderDeliveries();renderTransactions();syncCashOut();updatePhotoCount();calc();
 }
-function applyRecordToForm(r){
-  clearRecordForm(); if(!r)return;
-  document.getElementById('date').value=r.date||localDateISO(); document.getElementById('user').value=currentUser;
-  fuels.forEach(([k])=>{const f=r.fuels?.[k]||{}; document.getElementById(k+'OA').value=f.openingAmount||'';document.getElementById(k+'OL').value=f.openingLiters||'';document.getElementById(k+'CA').value=f.closingAmount||'';document.getElementById(k+'CL').value=f.closingLiters||''; const inv=r.inventory?.[k]||{};document.getElementById(k+'BeginStock').value=inv.beginningStock||'';document.getElementById(k+'ActualStock').value=inv.actualEnding||'';});
-  const f=r.financial||{}; ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{document.getElementById(id).value=f[id]||'';}); document.getElementById('remarks').value=f.remarks||'';
-  deliveries=Array.isArray(r.deliveries)?r.deliveries:[]; transactions=Array.isArray(r.transactions)?r.transactions:[]; renderDeliveries();renderTransactions();syncCashOut();calc();
+function applyRecordToForm(record){
+  clearRecordForm();if(!record)return;
+  document.getElementById('date').value=record.date||localDateISO();
+  document.getElementById('user').value=currentUser;
+  fuels.forEach(([k])=>{
+    const fuel=record.fuels?.[k]||{},inv=record.inventory?.[k]||{};
+    document.getElementById(k+'OL').value=fuel.openingLiters??'';
+    document.getElementById(k+'CL').value=fuel.closingLiters??'';
+    const price=Number(fuel.unitPrice||fuel.sellingPrice||0);
+    if(price>0&&(fuel.openingLiters!==null&&fuel.openingLiters!==undefined||fuel.closingLiters!==null&&fuel.closingLiters!==undefined)) dailyFuelPriceSnapshot[k]=price;
+    document.getElementById(k+'BeginStock').value=inv.beginningStock??'';
+    document.getElementById(k+'ActualStock').value=inv.actualEnding??'';
+  });
+  const finance=record.financial||{};
+  ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{document.getElementById(id).value=finance[id]??'';});
+  document.getElementById('remarks').value=finance.remarks||'';
+  deliveries=Array.isArray(record.deliveries)?record.deliveries:[];
+  transactions=Array.isArray(record.transactions)?record.transactions:[];
+  renderDeliveries();renderTransactions();syncCashOut();calc();
 }
-
 function recordLocalBackupKey(){ return storeKey('fuelOnlineDraftCache'); }
 function saveRecordLocalBackup(){
   if(!(currentRole==='admin'||currentRole==='personnel'))return;
@@ -1286,7 +1351,14 @@ window.closeDay=async function(){
   if(!(currentRole==='admin'||currentRole==='personnel')){alert('This role cannot close a daily record.');return;}
   let r=getRecord();
   if(r.date!==localDateISO()){alert('Past dates cannot be closed from today\'s entry form. Use the historical correction procedure to avoid overwriting records.');return;}
-  for(const [k,n] of fuels){if(r.fuels[k].closingAmount<r.fuels[k].openingAmount||r.fuels[k].closingLiters<r.fuels[k].openingLiters){alert(n+' closing reading cannot be lower than opening reading.');return;}}
+  for(const [k,n] of fuels){
+    const reading=meterResult(k);
+    if(!reading.complete){alert(n+': both liter readings and a valid fuel price are required. '+reading.reason);return;}
+    const official=Number(getStorePrices()[k]||0);
+    if(official>0&&Math.abs(official-reading.price)>0.004){
+      if(!confirm(n+' price changed since this day started. The saved rate is '+peso(reading.price)+'/L. If price changed during sales you need separate meter readings for each price period. Continue only if the saved rate applied to all liters.'))return;
+    }
+  }
   const missing=fuels.filter(([k])=>!document.getElementById(k+'Photo').files.length); if(missing.length && !confirm('One or more closing dispenser photos are missing. Close the day anyway?'))return;
   const disp=salesTotal(),pay=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales'); if(Math.abs(pay-disp)>0.009&&!document.getElementById('remarks').value.trim()){alert('Payment total does not match dispenser sales. Enter a remarks/explanation before closing.');return;}
   const t=recordTotals(r); if(Math.abs(t.variance)>0.009&&!document.getElementById('remarks').value.trim()){alert('There is a cash over/short amount. Enter a remarks/explanation before closing.');return;}
