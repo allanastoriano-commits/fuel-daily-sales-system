@@ -725,12 +725,13 @@ function reconcile(){
  const diff=payments-disp;
  const fuelCash=deliveries.filter(d=>d.payment==='Paid - Cash').reduce((a,d)=>a+Number(d.totalCost||0),0);
  const supplierCash=deliveries.reduce((a,d)=>a+(d.supplierPayments||[]).filter(p=>p.method==='Cash').reduce((x,p)=>x+Number(p.amount||0),0),0);
- const expected=val('cashSales')+val('cashIn')+countedCash().openingFloat-val('expenses')-val('withdrawal')-fuelCash-supplierCash;
- const variance=countedAndConfirmed?roundFuel(countedCash().total-expected):null;
+ const counted=countedCash();
+ const expected=counted.invalid?null:roundFuel(val('cashSales')+val('cashIn')+counted.openingFloat-val('expenses')-val('withdrawal')-fuelCash-supplierCash);
+ const variance=countedAndConfirmed&&!counted.invalid?roundFuel(counted.total-expected):null;
  document.getElementById('paymentsTotal').textContent=peso(payments);
  document.getElementById('dispenserTotal').textContent=peso(disp);
  document.getElementById('salesDiff').textContent=(diff>0?'+':'')+peso(diff);
- document.getElementById('expectedCash').value=peso(expected);
+ document.getElementById('expectedCash').value=expected===null?'Check cash float':peso(expected);
  document.getElementById('cashVariance').value=variance===null?'Pending confirmed count':(variance>0?'+':'')+peso(variance);
  const w=document.getElementById('paymentWarning');
  if(Math.abs(diff)>0.009) w.innerHTML='<div style="font-size:13px;padding:10px;border-radius:10px;background:#fff3e8;color:#9a4b00;margin-top:10px"><b>Check:</b> Payment total does not equal dispenser sales. Difference: '+(diff>0?'+':'')+peso(diff)+'</div>';
@@ -1370,6 +1371,7 @@ window.saveDraft=async function(options={}){
   }
   if(!mcloiSessionUser)return false;
   const r=getRecord();
+  if(countedCash().invalid){const msg='Invalid bill/coin quantities or opening float. Correct these values before saving.';if(!silent)alert(msg);return false;}
   if(r.date!==localDateISO()){
     const msg='Past dates are protected from automatic saving. Review earlier dates without replacing saved inventory or deliveries.';
     const status=document.getElementById('saveStatus');
@@ -1462,6 +1464,7 @@ window.closeDay=async function(){
   }
   const missing=fuels.filter(([k])=>!document.getElementById(k+'Photo').files.length); if(missing.length && !confirm('One or more closing dispenser photos are missing. Close the day anyway?'))return;
   const disp=salesTotal(),pay=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales'); if(Math.abs(pay-disp)>0.009&&!document.getElementById('remarks').value.trim()){alert('Payment total does not match dispenser sales. Enter a remarks/explanation before closing.');return;}
+  if(countedCash().invalid){alert('Correct the invalid bill or coin counts and opening float before closing.');return;}
   if(!r.cashCount?.confirmed){alert('Count and confirm all cash denominations before closing.');return;}
   const t=recordTotals(r); if(Math.abs(t.variance)>0.009&&!document.getElementById('remarks').value.trim()){alert('There is a cash over/short amount. Enter a remarks/explanation before closing.');return;}
   if(!confirm('Close and lock this daily record online?'))return;
