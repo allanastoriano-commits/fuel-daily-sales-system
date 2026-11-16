@@ -146,14 +146,15 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
   <p><small>Fuel purchases are recorded separately from ordinary expenses because they affect both cash and fuel inventory.</small></p>
   <div class="grid">
    <div><label>Fuel Type</label><select id="deliveryFuel"><option>Regular</option><option>Premium</option><option>Diesel</option></select></div>
-   <div><label>Supplier</label><input id="deliverySupplier" list="supplierOptions" value="FUEL CENTRAL" placeholder="Select or enter supplier"><datalist id="supplierOptions"><option value="FUEL CENTRAL"></option></datalist><small class="muted">FUEL CENTRAL is the default. Other supplier names entered here are remembered for 24 hours.</small></div>
+   <div><label>Supplier</label><input id="deliverySupplier" list="supplierOptions" value="FUEL CENTRAL" placeholder="Select or type supplier name"><datalist id="supplierOptions"><option value="FUEL CENTRAL"></option><option value="TYB"></option><option value="DJ Gasoline Station"></option></datalist><small class="muted">Choose Fuel Central, TYB, DJ Gasoline Station, or type another supplier. Saved suppliers remain available across authorized devices.</small></div>
    <div><label>Liters Delivered</label><input id="deliveryLiters" type="number" step="0.01" inputmode="decimal"></div>
    <div><label>Cost per Liter (₱)</label><input id="deliveryCost" type="number" step="0.01" inputmode="decimal"></div>
    <div><label>Payment Status / Source</label><select id="deliveryPayment"><option>Paid - Cash</option><option value="Paid - Owner's Personal Cash">Paid - Owner's Personal Cash</option><option>Paid - GCash/Bank</option><option>Supplier Credit / Payable</option></select></div>
    <div><label>Receipt / Reference</label><input id="deliveryRef" placeholder="Optional reference"></div>
    <div><label>Receipt Photo</label><input id="deliveryPhoto" type="file" accept="image/*" capture="environment"></div>
   </div>
-  <div style="margin-top:10px"><button onclick="addDelivery()">Add Fuel Delivery</button></div><small class="muted">Added deliveries are automatically saved to the online draft.</small>
+  <div style="margin-top:10px"><button type="button" class="secondary" onclick="addNewSupplier()">Save New Supplier</button><span id="supplierSaveStatus" style="margin-left:8px;font-size:13px" aria-live="polite"></span></div>
+  <div style="margin-top:10px"><button onclick="addDelivery()">Add Fuel Delivery</button></div><small class="muted">Added deliveries are automatically saved to the online draft. New suppliers can be saved online for future use.</small>
   <div id="deliveryList"></div>
   <div class="row3" style="margin-top:12px">
    <div class="metric"><b id="fuelPurchaseTotal">₱0.00</b><span>FUEL PURCHASES</span></div>
@@ -681,29 +682,68 @@ function reconcile(){
  else w.innerHTML='';
 }
 
-const SUPPLIER_TTL_MS=24*60*60*1000;
-function supplierCacheKey(){return 'fuelTemporarySuppliers__'+(currentStore||'store1');}
-function getTemporarySuppliers(){
- const now=Date.now(); let rows=[]; try{rows=JSON.parse(localStorage.getItem(supplierCacheKey())||'[]')}catch(e){}
- rows=(Array.isArray(rows)?rows:[]).filter(x=>x&&x.name&&now-Number(x.savedAt||0)<SUPPLIER_TTL_MS);
- localStorage.setItem(supplierCacheKey(),JSON.stringify(rows)); return rows;
+const STANDARD_FUEL_SUPPLIERS=['FUEL CENTRAL','TYB','DJ Gasoline Station'];
+const supplierCacheByStore={};
+function supplierStorageKey(){return 'mcloiPermanentSuppliers__'+(currentStore||'store1');}
+function storedSupplierNames(){
+ try{const list=JSON.parse(localStorage.getItem(supplierStorageKey())||'[]');return Array.isArray(list)?list:[];}catch(e){return [];}
 }
-function rememberSupplier(name){
- name=(name||'').trim(); if(!name||name.toUpperCase()==='FUEL CENTRAL')return;
- const rows=getTemporarySuppliers().filter(x=>x.name.toUpperCase()!==name.toUpperCase()); rows.unshift({name,savedAt:Date.now()});
- localStorage.setItem(supplierCacheKey(),JSON.stringify(rows.slice(0,20))); refreshSupplierOptions();
+function normalizeSupplierName(name){return String(name||'').trim().replace(/\s+/g,' ').slice(0,100);}
+function supplierList(){
+ const names=[...STANDARD_FUEL_SUPPLIERS,...(supplierCacheByStore[currentStore]||storedSupplierNames())];
+ return [...new Map(names.filter(Boolean).map(name=>[name.toLocaleLowerCase('en-PH'),name])).values()];
 }
 function refreshSupplierOptions(){
- const dl=document.getElementById('supplierOptions'); if(!dl)return;
- const names=['FUEL CENTRAL',...getTemporarySuppliers().map(x=>x.name)];
- dl.innerHTML=[...new Set(names)].map(n=>`<option value="${String(n).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"></option>`).join('');
- const inp=document.getElementById('deliverySupplier'); if(inp&&!inp.value)inp.value='FUEL CENTRAL';
+ const list=document.getElementById('supplierOptions');
+ if(list){
+  list.replaceChildren();
+  supplierList().forEach(name=>{const option=document.createElement('option');option.value=name;list.appendChild(option);});
+ }
+ const field=document.getElementById('deliverySupplier');if(field&&!field.value)field.value='FUEL CENTRAL';
 }
+async function loadOnlineSuppliers(){
+ const key=currentStore,local=storedSupplierNames();
+ supplierCacheByStore[key]=[...STANDARD_FUEL_SUPPLIERS,...local];
+ refreshSupplierOptions();
+ if(!mcloiSessionUser)return;
+ const {data,error}=await mcloiDb.from('mcloi_suppliers').select('name').eq('store_id',key).order('name');
+ if(error){console.warn('Suppliers could not sync:',error);return;}
+ const names=(data||[]).map(row=>normalizeSupplierName(row.name)).filter(Boolean);
+ supplierCacheByStore[key]=[...new Set([...STANDARD_FUEL_SUPPLIERS,...names,...local])];
+ localStorage.setItem('mcloiPermanentSuppliers__'+key,JSON.stringify(supplierCacheByStore[key]));
+ if(currentStore===key)refreshSupplierOptions();
+}
+async function rememberSupplier(raw){
+ const name=normalizeSupplierName(raw);
+ if(name.length<2){return {ok:false,message:'Enter a supplier name of at least 2 characters.'};}
+ const key=currentStore,existing=supplierList();
+ const chosen=existing.find(x=>x.toLowerCase()===name.toLowerCase());
+ if(chosen)return {ok:true,message:'Supplier already on your list.',name:chosen};
+ if(!mcloiSessionUser)return {ok:false,message:'Sign in and connect to the internet to save new suppliers.'};
+ const {error}=await mcloiDb.from('mcloi_suppliers').insert({store_id:key,name,created_by:mcloiSessionUser.id});
+ if(error){
+  console.warn('Supplier save failed:',error);
+  return {ok:false,message:'Supplier was not saved online. Check your connection or permissions.'};
+ }
+ supplierCacheByStore[key]=[...(supplierCacheByStore[key]||STANDARD_FUEL_SUPPLIERS),name];
+ localStorage.setItem('mcloiPermanentSuppliers__'+key,JSON.stringify(supplierCacheByStore[key]));
+ if(currentStore===key)refreshSupplierOptions();
+ return {ok:true,message:'Saved '+name+' as a permanent supplier.',name};
+}
+window.addNewSupplier=async function(){
+ if(!(currentRole==='admin'||currentRole==='personnel')){alert('Only Admin or Store Cashier can add suppliers.');return;}
+ const field=document.getElementById('deliverySupplier');
+ const status=document.getElementById('supplierSaveStatus');
+ const name=normalizeSupplierName(field?.value);
+ const result=await rememberSupplier(name);
+ if(status){status.textContent=result.message;status.style.color=result.ok?'#18794e':'#a94442';}
+ if(result.ok&&field)field.value=result.name;
+};
 function addDelivery(){
  const liters=Number(deliveryLiters.value||0), cost=Number(deliveryCost.value||0);
  const supplier=(deliverySupplier.value||'FUEL CENTRAL').trim()||'FUEL CENTRAL';
  if(liters<=0){alert('Enter liters delivered.');return}
- rememberSupplier(supplier);
+ rememberSupplier(supplier).then(result=>{if(!result.ok){const st=document.getElementById('supplierSaveStatus');if(st){st.textContent=result.message;st.style.color='#a94442';}}});
  deliveries.push({id:'D'+Date.now(),fuel:deliveryFuel.value,supplier:supplier,liters,costPerLiter:cost,totalCost:liters*cost,payment:deliveryPayment.value,reference:deliveryRef.value.trim(),photoAttached:deliveryPhoto.files.length>0,time:new Date().toISOString(),supplierPayments:[]});
  deliverySupplier.value='FUEL CENTRAL';deliveryLiters.value='';deliveryCost.value='';deliveryRef.value='';deliveryPhoto.value='';
  renderDeliveries();inventoryCalc();
@@ -1063,6 +1103,7 @@ async function applyOnlineAccess(){
   document.getElementById('dashStoreName').textContent=prototypeStores.find(x=>x.id===currentStore)?.name||currentStore;
   const badge=document.getElementById('storeDataBadge'); if(badge)badge.textContent='ONLINE SYNC';
   await renderStorePrices();
+  await loadOnlineSuppliers();
   await loadOnlineDraft();
   await renderHistory();
   if(currentRole==='admin') await renderAdminOverview();
@@ -1079,6 +1120,7 @@ window.changeStore=async function(){
   currentStore=document.getElementById('activeStore').value;
   document.getElementById('dashStoreName').textContent=prototypeStores.find(x=>x.id===currentStore)?.name||currentStore;
   await renderStorePrices();
+  await loadOnlineSuppliers();
   await loadOnlineDraft();
   await renderHistory();
   if(currentRole==='admin')await renderAdminOverview();
