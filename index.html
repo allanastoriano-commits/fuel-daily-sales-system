@@ -614,8 +614,17 @@ setAutomaticDate(true);
 function fuelHTML(k,n){
   return '<div class="card fuel"><h3>'+n+'</h3>'
    +'<div class="metric" style="text-align:left;margin-bottom:10px"><span>OFFICIAL SELLING PRICE FOR THIS RECORD</span><b id="'+k+'Price" style="font-size:22px">₱0.00 / L</b><div id="'+k+'PriceNote" style="font-size:12px;color:#65727e">Official store price</div></div>'
-   +'<div class="grid"><div><label>Opening LITER Totalizer (L)</label><input id="'+k+'OL" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Morning liter reading" oninput="calc()"></div>'
+   +'<div class="grid"><div><label>Opening LITER Totalizer (L)</label><input id="'+k+'OL" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Morning liter reading" oninput="openingReadingEdited(\''+k+'\');calc()"></div>'
    +'<div><label>Closing LITER Totalizer (L)</label><input id="'+k+'CL" type="number" min="0" step="0.01" inputmode="decimal" placeholder="End-of-day liter reading" oninput="calc()"></div></div>'
+   +'<div style="margin-top:12px;padding:12px;border:1px solid #dce2e7;border-radius:12px;background:#fafbfc"><b>Opening Totalizer Photo</b>' 
+   +'<p style="font-size:13px;color:#65727e">Take a clear photo showing the LITER digits. The app can suggest a reading, but the cashier must check and confirm the number.</p>'
+   +'<input id="'+k+'OpeningPhoto" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onchange="chooseOpeningPhoto(\''+k+'\',this)">'
+   +'<img class="photo" id="'+k+'OpeningPreview" alt="Opening liter meter photo" style="max-height:230px">'
+   +'<button type="button" class="secondary" style="margin-top:9px" onclick="readOpeningPhoto(\''+k+'\')">Read Digits from Photo</button>'
+   +'<div style="margin-top:9px"><label>Suggested Opening Liters (check or correct)</label><input id="'+k+'OpeningCandidate" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Reading appears here; edit if needed"></div>'
+   +'<button type="button" style="margin-top:9px" onclick="confirmOpeningReading(\''+k+'\')">Confirm Reading & Save Opening Photo</button>'
+   +'<div id="'+k+'OpeningPhotoStatus" style="font-size:13px;color:#65727e;margin-top:8px" aria-live="polite">No opening photo saved yet. Manual entry also works.</div>'
+   +'</div>'
    +'<div class="grid" style="margin-top:10px"><div><label>Liters Sold — Auto</label><input id="'+k+'Liters" readonly></div><div><label>Total Sales (₱) — Auto</label><input id="'+k+'Sales" readonly></div></div>'
    +'<div id="'+k+'MeterStatus" style="margin-top:8px;font-size:13px;color:#65727e">Enter both liter readings.</div>'
    +'<div style="margin-top:10px"><label>Closing Dispenser Photo</label><input id="'+k+'Photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto(\''+k+'\',this)"><img class="photo" id="'+k+'Preview"></div></div>';
@@ -628,6 +637,134 @@ let deliveries=[], transactions=[];
 
 
 function val(id){return Number(document.getElementById(id).value||0)}
+// Opening photos use the existing private mcloi-evidence storage bucket.
+// OCR runs on the cashier's device. The suggestion is NEVER copied into a meter field without explicit confirmation.
+let openingPhotoState={};
+let tesseractLoadPromise=null;
+const OCR_SCRIPT_URL='https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js';
+function setOpeningPhotoStatus(k,message,isWarning=false){
+ const el=document.getElementById(k+'OpeningPhotoStatus');
+ if(el){el.textContent=message;el.style.color=isWarning?'#9a4b00':'#18794e';}
+}
+function getOpeningPhotoState(k){
+ return openingPhotoState[k]||(openingPhotoState[k]={photoPath:null,confirmedReading:null,confirmedAt:null,previewUrl:null,busy:false,selection:0});
+}
+function clearOpeningPhotoState(k){
+ const state=openingPhotoState[k];
+ if(state?.previewUrl){URL.revokeObjectURL(state.previewUrl);}
+ openingPhotoState[k]={photoPath:null,confirmedReading:null,confirmedAt:null,previewUrl:null,busy:false,selection:(state?.selection||0)+1};
+ const file=document.getElementById(k+'OpeningPhoto');if(file)file.value='';
+ const img=document.getElementById(k+'OpeningPreview');if(img){img.removeAttribute('src');img.style.display='none';}
+ const candidate=document.getElementById(k+'OpeningCandidate');if(candidate)candidate.value='';
+ setOpeningPhotoStatus(k,'No opening photo saved yet. Manual reading remains available.');
+}
+window.chooseOpeningPhoto=function(k,input){
+ const state=getOpeningPhotoState(k);
+ state.selection++;
+ const file=input.files?.[0];
+ const image=document.getElementById(k+'OpeningPreview');
+ if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null;}
+ const candidate=document.getElementById(k+'OpeningCandidate');
+ if(candidate)candidate.value='';
+ if(!file){setOpeningPhotoStatus(k,state.photoPath?'Previous opening photo is saved.':'Select an opening photo to begin.');return;}
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024){
+  input.value='';
+  setOpeningPhotoStatus(k,'Please select a JPEG, PNG, or WebP image under 10 MB.',true);return;
+ }
+ state.previewUrl=URL.createObjectURL(file);
+ image.src=state.previewUrl;image.style.display='block';
+ setOpeningPhotoStatus(k,'Photo selected. Tap Read Digits, or enter the reading in the suggestion field and confirm.');
+};
+function loadOpeningOcrLibrary(){
+ if(window.Tesseract?.createWorker)return Promise.resolve(window.Tesseract);
+ if(tesseractLoadPromise)return tesseractLoadPromise;
+ tesseractLoadPromise=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  script.src=OCR_SCRIPT_URL;script.async=true;
+  script.onload=()=>window.Tesseract?.createWorker?resolve(window.Tesseract):reject(Error('Photo reader did not initialize.'));
+  script.onerror=()=>reject(Error('Photo reader could not download. Connect to the internet, or type the reading manually.'));
+  document.head.appendChild(script);
+ }).catch(err=>{tesseractLoadPromise=null;throw err});
+ return tesseractLoadPromise;
+}
+function meterCandidatesFromText(raw){
+ const text=String(raw||'').replace(/,/g,'.');
+ const tokens=[...text.matchAll(/\b\d{3,8}(?:\.\d{1,3})?\b/g)].map(m=>m[0]);
+ const valid=tokens.filter(v=>Number.isFinite(Number(v))&&Number(v)>=0);
+ const decimal=valid.filter(v=>v.includes('.'));
+ return [...new Set(decimal.length?decimal:valid)];
+}
+window.readOpeningPhoto=async function(k){
+ if(!(currentRole==='admin'||currentRole==='personnel'))return;
+ const input=document.getElementById(k+'OpeningPhoto'),file=input?.files?.[0],state=getOpeningPhotoState(k);
+ if(!file){setOpeningPhotoStatus(k,'Choose or photograph the opening totalizer first.',true);return;}
+ if(state.busy){setOpeningPhotoStatus(k,'Photo reading is already running.');return;}
+ const mark=state.selection;state.busy=true;
+ setOpeningPhotoStatus(k,'Reading the photo on this device. Ensure that the liter digits are visible...');
+ let worker;
+ try{
+  const tesseract=await loadOpeningOcrLibrary();
+  worker=await tesseract.createWorker('eng');
+  await worker.setParameters({tessedit_char_whitelist:'0123456789.,',tessedit_pageseg_mode:tesseract.PSM?.SINGLE_BLOCK||'6'});
+  const out=await worker.recognize(file);
+  if(mark!==getOpeningPhotoState(k).selection)return;
+  const matches=meterCandidatesFromText(out.data?.text);
+  const candidate=document.getElementById(k+'OpeningCandidate');
+  if(matches.length===1){candidate.value=String(Number(matches[0]).toFixed(2));
+   setOpeningPhotoStatus(k,'Suggested '+candidate.value+' L. CHECK the photograph and edit this number if necessary. Then tap Confirm Reading & Save Opening Photo.');}
+  else{candidate.value='';setOpeningPhotoStatus(k,matches.length>1?'Several numbers found ('+matches.slice(0,5).join(', ')+'). Type the exact LITER totalizer from the photo in the suggestion field before confirming.':'No clear liter totalizer detected. Type the exact liter reading in the suggestion field and confirm.',true);}
+ }catch(err){if(mark===getOpeningPhotoState(k).selection)setOpeningPhotoStatus(k,'Automatic reading unavailable: '+(err.message||'unknown error')+'. Please type the reading in the suggestion field, then confirm.',true);}
+ finally{if(worker){try{await worker.terminate();}catch(e){console.warn('OCR worker cleanup',e)}}state.busy=false;}
+};
+window.confirmOpeningReading=async function(k){
+ if(!(currentRole==='admin'||currentRole==='personnel')){alert('Only an authorized cashier or Admin can confirm readings.');return;}
+ const date=document.getElementById('date').value;
+ if(date!==localDateISO()){alert('Opening photos may only be saved to today’s active draft. Earlier dates are protected.');return;}
+ const state=getOpeningPhotoState(k),file=document.getElementById(k+'OpeningPhoto').files?.[0];
+ const raw=document.getElementById(k+'OpeningCandidate').value.trim();
+ const proposed=Number(raw);
+ if(!raw||!Number.isFinite(proposed)||proposed<0||!/^\d+(?:\.\d{1,2})?$/.test(raw)){alert('Enter a valid nonnegative liter totalizer with no more than 2 decimal places.');return;}
+ if(hasMeterReading(k,'CL')&&proposed>val(k+'CL')){alert('Opening liters cannot exceed an already entered closing totalizer. Check both values.');return;}
+ if(!file){setOpeningPhotoStatus(k,'Select a new opening photo to confirm and save with the reading.',true);return;}
+ if(!mcloiSessionUser){setOpeningPhotoStatus(k,'Sign in and connect online to save the opening photo.',true);return;}
+ if(state.busy){setOpeningPhotoStatus(k,'The photo reader is still running. Try again after it finishes.',true);return;}
+ if(!confirm('Is '+proposed.toFixed(2)+' liters exactly what the OPENING liter totalizer shows in this photo? Confirm after checking every digit.'))return;
+ const store=currentStore,sessionId=mcloiSessionUser.id;
+ const mark=state.selection;state.busy=true;
+ setOpeningPhotoStatus(k,'Uploading the photo to secure storage...');
+ try{
+  const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type];
+  if(!ext||file.size>10*1024*1024)throw Error('Use a JPEG, PNG, or WebP photo under 10 MB.');
+  const path=store+'/'+date+'/'+sessionId+'/'+k+'-opening-'+Date.now()+'.'+ext;
+  const {error}=await mcloiDb.storage.from('mcloi-evidence').upload(path,file,{upsert:false,contentType:file.type});
+  if(error)throw Error(cleanError(error));
+  if(mark!==getOpeningPhotoState(k).selection||store!==currentStore||date!==document.getElementById('date').value){
+    setOpeningPhotoStatus(k,'Photo was uploaded, but the form changed. Reopen today’s record before confirming a reading.',true);return;
+  }
+  state.photoPath=path;state.confirmedReading=Number(proposed.toFixed(2));state.confirmedAt=new Date().toISOString();
+  document.getElementById(k+'OL').value=state.confirmedReading.toFixed(2);
+  calc();
+  saveRecordLocalBackup();
+  const saved=await window.saveDraft({silent:true});
+  setOpeningPhotoStatus(k,saved?'Opening '+state.confirmedReading.toFixed(2)+' L confirmed. Photo and reading saved online.':'Photo uploaded. The reading is on this phone, but online draft sync failed. Check your connection and tap Save Draft.',!saved);
+ }catch(err){setOpeningPhotoStatus(k,'Photo NOT saved: '+(err.message||'upload failed')+'. Check your internet and try again. The opening reading was not changed.',true);}
+ finally{state.busy=false;}
+};
+window.openingReadingEdited=function(k){
+ const state=getOpeningPhotoState(k),reading=document.getElementById(k+'OL')?.value;
+ if(state.photoPath&&reading!==''&&Math.abs(Number(reading)-Number(state.confirmedReading))>0.004){
+  setOpeningPhotoStatus(k,'Opening field differs from the reading confirmed with the saved photo. Review the photograph and correct any mismatch.',true);
+ }
+};
+async function loadSavedOpeningPhotoPreview(k,path,store){
+ const state=getOpeningPhotoState(k);
+ if(state.photoPath!==path||store!==currentStore)return;
+ const {data,error}=await mcloiDb.storage.from('mcloi-evidence').createSignedUrl(path,300);
+ if(error||!data?.signedUrl)return;
+ if(state.photoPath!==path||store!==currentStore)return;
+ const image=document.getElementById(k+'OpeningPreview');if(image){image.src=data.signedUrl;image.style.display='block';}
+}
+
 // A per-day price snapshot prevents later official price changes from silently repricing saved meter sales.
 let dailyFuelPriceSnapshot={};
 function roundFuel(x){return Math.round((Number(x)+Number.EPSILON)*100)/100;}
@@ -945,7 +1082,10 @@ function getRecord(){
       closingLiters:hasMeterReading(k,'CL')?val(k+'CL'):null,
       openingAmount:0,closingAmount:0,unitPrice:entered?result.price:null,
       litersSold:result.liters,sales:result.sales,calculationMode:'liter_totalizers_x_price',
-      photoAttached:document.getElementById(k+'Photo').files.length>0};
+      photoAttached:document.getElementById(k+'Photo').files.length>0,
+      openingPhotoPath:getOpeningPhotoState(k).photoPath,
+      openingPhotoConfirmedReading:getOpeningPhotoState(k).confirmedReading,
+      openingPhotoConfirmedAt:getOpeningPhotoState(k).confirmedAt};
     const delivered=deliveries.filter(d=>d.fuel===n).reduce((a,d)=>a+Number(d.liters||0),0);
     const ended=document.getElementById(k+'ActualStock');
     const actualEnding=ended.value.trim()===''?null:Number(ended.value);
@@ -1293,6 +1433,7 @@ function clearRecordForm(){
     ['OL','CL','BeginStock','ActualStock'].forEach(s=>{const el=document.getElementById(k+s);if(el)el.value='';});
     const image=document.getElementById(k+'Preview');if(image){image.src='';image.style.display='none';}
     const file=document.getElementById(k+'Photo');if(file)file.value='';
+    clearOpeningPhotoState(k);
   });
   ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   clearCashCount();
@@ -1307,6 +1448,14 @@ function applyRecordToForm(record){
     const fuel=record.fuels?.[k]||{},inv=record.inventory?.[k]||{};
     document.getElementById(k+'OL').value=fuel.openingLiters??'';
     document.getElementById(k+'CL').value=fuel.closingLiters??'';
+    const state=getOpeningPhotoState(k);
+    state.photoPath=fuel.openingPhotoPath||null;
+    state.confirmedReading=fuel.openingPhotoConfirmedReading??null;
+    state.confirmedAt=fuel.openingPhotoConfirmedAt||null;
+    if(state.photoPath){
+      setOpeningPhotoStatus(k,'Saved opening photo attached. Confirmed reading: '+(state.confirmedReading??'not recorded')+' L.');
+      loadSavedOpeningPhotoPreview(k,state.photoPath,currentStore);
+    }
     const price=Number(fuel.unitPrice||fuel.sellingPrice||0);
     if(price>0&&(fuel.openingLiters!==null&&fuel.openingLiters!==undefined||fuel.closingLiters!==null&&fuel.closingLiters!==undefined)) dailyFuelPriceSnapshot[k]=price;
     document.getElementById(k+'BeginStock').value=inv.beginningStock??'';
