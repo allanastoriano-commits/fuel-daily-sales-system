@@ -1776,6 +1776,19 @@ async function saveFuelDraftVerified(options={}){
  saveRecordLocalBackup();
  const meta=draftMeta(),startLastEdit=Number(meta.lastEdit||0);
  const totals=recordTotals(r);
+ const {data:priorRecord,error:precheckError}=await mcloiDb.from('mcloi_daily_records')
+  .select('status').eq('store_id',store).eq('business_date',today).maybeSingle();
+ if(precheckError){
+  const st=document.getElementById('saveStatus');
+  if(st)st.textContent='Could not verify existing day status. Phone backup preserved. Check your connection.';
+  return false;
+ }
+ if(priorRecord?.status==='closed'){
+  fuelDraftConflict={type:'closed',store,date:today};
+  recoveryMessage('This day is closed and cannot be overwritten. Check History.',true);
+  if(!silent)alert('The daily record is already closed. Do not overwrite it.');
+  return false;
+ }
  const payload={store_id:store,business_date:r.date,status:'draft',cashier_name:currentUser,record_data:r,
   total_sales:totals.totalSales,total_liters:totals.totalLiters,expected_cash:totals.expected,actual_cash:totals.actual,cash_variance:totals.variance,
   updated_by:userId,created_by:userId};
