@@ -726,6 +726,7 @@ window.confirmOpeningReading=async function(k){
  if(!raw||!Number.isFinite(proposed)||proposed<0||!/^\d+(?:\.\d{1,2})?$/.test(raw)){alert('Enter a valid nonnegative liter totalizer with no more than 2 decimal places.');return;}
  if(hasMeterReading(k,'CL')&&proposed>val(k+'CL')){alert('Opening liters cannot exceed an already entered closing totalizer. Check both values.');return;}
  if(!file){setOpeningPhotoStatus(k,'Select a new opening photo to confirm and save with the reading.',true);return;}
+ if(state.photoPath&&!confirm('This fuel already has a saved opening photograph. Save a new photo reference for this date? The previous evidence file will remain stored.'))return;
  if(!mcloiSessionUser){setOpeningPhotoStatus(k,'Sign in and connect online to save the opening photo.',true);return;}
  if(state.busy){setOpeningPhotoStatus(k,'The photo reader is still running. Try again after it finishes.',true);return;}
  if(!confirm('Is '+proposed.toFixed(2)+' liters exactly what the OPENING liter totalizer shows in this photo? Confirm after checking every digit.'))return;
@@ -752,8 +753,10 @@ window.confirmOpeningReading=async function(k){
 };
 window.openingReadingEdited=function(k){
  const state=getOpeningPhotoState(k),reading=document.getElementById(k+'OL')?.value;
- if(state.photoPath&&reading!==''&&Math.abs(Number(reading)-Number(state.confirmedReading))>0.004){
-  setOpeningPhotoStatus(k,'Opening field differs from the reading confirmed with the saved photo. Review the photograph and correct any mismatch.',true);
+ if(state.photoPath&&state.confirmedReading!==null&&(reading===''||!Number.isFinite(Number(reading))||Math.abs(Number(reading)-Number(state.confirmedReading))>0.004)){
+  state.confirmedReading=null;
+  state.confirmedAt=null;
+  setOpeningPhotoStatus(k,'The opening value was changed after photo confirmation. The saved photo remains as evidence; recheck the reading before closing.',true);
  }
 };
 async function loadSavedOpeningPhotoPreview(k,path,store){
