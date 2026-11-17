@@ -1,4 +1,4 @@
-const CACHE_NAME='fuel-daily-sales-v15-opening-liter-photo-ocr';
+const CACHE_NAME='fuel-daily-sales-v16-closing-liter-photo-ocr';
 const APP_SHELL=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png','./mcloi-preview.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)));
