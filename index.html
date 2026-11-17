@@ -1288,11 +1288,8 @@ function renderBookkeeper(){
 initBookkeeper();
 
 function exportData(){let data={draft:JSON.parse(localStorage.getItem('fuelDraft')||'null'),history:JSON.parse(localStorage.getItem('fuelHistory')||'[]'),remittances:allRemittances(),centralCashbook:allCashbook()};let b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='fuel-sales-backup.json';a.click()}
-(function load(){let r=JSON.parse(localStorage.getItem('fuelDraft')||'null');if(!r)return;date.value=r.date||date.value;user.value=r.user||'';fuels.forEach(([k])=>{let f=r.fuels[k]||{};document.getElementById(k+'OA').value=f.openingAmount||'';document.getElementById(k+'OL').value=f.openingLiters||'';document.getElementById(k+'CA').value=f.closingAmount||'';document.getElementById(k+'CL').value=f.closingLiters||''});
- let f=r.financial||{};['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{document.getElementById(id).value=f[id]||''});document.getElementById('remarks').value=f.remarks||'';
- deliveries=r.deliveries||[];deliveries.forEach((d,i)=>{d.supplierPayments=d.supplierPayments||[];d.id=d.id||('OLD'+i)});transactions=r.transactions||[];
- fuels.forEach(([k])=>{let inv=(r.inventory||{})[k]||{};document.getElementById(k+'BeginStock').value=inv.beginningStock||'';document.getElementById(k+'ActualStock').value=inv.actualEnding||''});
- renderDeliveries();renderTransactions();syncCashOut();calc()})();
+// Removed obsolete prototype draft loader referencing deleted peso-totalizer fields.
+// Online drafts and device backups are restored by loadOnlineDraft().
 refreshSupplierOptions();
 let lastCalendarDate=localDateISO();
 setInterval(()=>{const nowDay=localDateISO();if(nowDay!==lastCalendarDate){lastCalendarDate=nowDay;const draft=JSON.parse(localStorage.getItem('fuelDraft')||'null');if(!draft||draft.date!==document.getElementById('date').value)setAutomaticDate(true);refreshSupplierOptions();}},60000);
@@ -1663,6 +1660,16 @@ window.reviewPriorRecord=async function(){
  const reconstruction=data.record_data?.salesReconstruction;
  const fuelSales=data.record_data?.fuels||{};
  const fuelSalesRows=[['regular','Regular'],['premium','Premium'],['diesel','Diesel']].map(([k,name])=>'<tr><td>'+name+'</td><td>'+Number(fuelSales[k]?.litersSold||0).toFixed(2)+' L</td><td>'+peso(fuelSales[k]?.sales||0)+'</td></tr>').join('');
+ const readingCell=v=>v===null||v===undefined||v===''?'Not entered':Number(v).toFixed(2)+' L';
+ const readingRows=[['regular','Regular'],['premium','Premium'],['diesel','Diesel']].map(([k,name])=>{
+  const fuel=fuelSales[k]||{};
+  const photos=(fuel.openingPhotoPath?'Opening photo saved':'No opening photo saved')+' / '+((fuel.closingPhotoPath||fuel.photoPath)?'Closing photo saved':'No closing photo saved');
+  return '<tr><td>'+name+'</td><td>'+readingCell(fuel.openingLiters)+'</td><td>'+readingCell(fuel.closingLiters)+'</td><td>'+readingCell(fuel.litersSold??null)+'</td></tr>'
+   +'<tr><td colspan="4" style="font-size:12px;color:#65727e">'+photos+'</td></tr>';
+ }).join('');
+ const readingsHtml='<h3 style="margin-top:12px">Saved Opening & Closing Totalizers</h3><div style="overflow-x:auto">'
+  +'<table><thead><tr><th>Fuel</th><th>Opening</th><th>Closing</th><th>Liters Sold</th></tr></thead><tbody>'+readingRows+'</tbody></table></div>'
+  +'<small>The saved readings are displayed for both Draft and Closed dates. This history view does not change the records.</small>';
  const salesReviewHtml=reconstruction?'<h3 style="margin-top:12px">Reconstructed Fuel Sales</h3><table><thead><tr><th>Fuel</th><th>Liters Sold</th><th>Calculated Sales</th></tr></thead><tbody>'+fuelSalesRows+'</tbody></table>'
   +'<div class="viewer-note" style="margin-top:8px"><b>Total: '+Number(data.total_liters||0).toFixed(2)+' L — '+peso(data.total_sales||0)+'</b><div>Verified cumulative liter readings × selling prices. Peso totalizers unavailable.</div></div>'
   +'<div style="margin-top:8px;padding:10px;border-radius:10px;background:#fff3e8"><b>Cash reconciliation pending.</b> Reported cash remittance: '+peso(reconstruction.cashRemittedReported||0)+'. Difference requiring explanation: '+peso(reconstruction.cashDifferencePendingReview||0)+'. Not a confirmed shortage.</div>'
@@ -1670,6 +1677,7 @@ window.reviewPriorRecord=async function(){
  out.innerHTML='<div class="viewer-note"><b>'+safeReviewText(data.business_date)+'</b> — '+safeReviewText(data.status).toUpperCase()+' (READ-ONLY)</div>'
  +'<h3>Fuel Deliveries</h3>'+(deliveries.length?'<div style="overflow-x:auto"><table><thead><tr><th>Fuel</th><th>Delivered</th><th>Cost</th><th>Paid From</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<small>No deliveries saved for this date.</small>')
  +'<h3 style="margin-top:12px">Beginning Inventory and Deliveries</h3><table><thead><tr><th>Fuel</th><th>Beginning</th><th>Delivered</th></tr></thead><tbody>'+stock+'</tbody></table>'
+ +readingsHtml
  +salesReviewHtml
  +'<small>Previous-day record for review only. It has not been copied into today; do not re-enter these deliveries.</small>';
 };
@@ -1802,13 +1810,24 @@ window.closeDay=async function(){
 };
 
 window.renderHistory=async function(){
-  const el=document.getElementById('historyList'); if(!el||!mcloiSessionUser)return;
-  const {data,error}=await mcloiDb.from('mcloi_daily_records').select('business_date,total_sales,total_liters,cash_variance,cashier_name').eq('store_id',currentStore).eq('status','closed').order('business_date',{ascending:false}).limit(120);
-  if(error){el.innerHTML='<small>Could not load online history.</small>';return;}
-  if(!data?.length){el.innerHTML='<small>No closed online records yet.</small>';return;}
-  el.innerHTML='<table><thead><tr><th>Date</th><th>Sales</th><th>Liters</th></tr></thead><tbody>'+data.map(r=>`<tr><td>${r.business_date}</td><td>${peso(r.total_sales)}</td><td>${Number(r.total_liters||0).toFixed(2)} L</td></tr>`).join('')+'</tbody></table>';
+ const el=document.getElementById('historyList'); if(!el||!mcloiSessionUser)return;
+ const {data,error}=await mcloiDb.from('mcloi_daily_records').select('business_date,status,total_sales,total_liters')
+  .eq('store_id',currentStore).order('business_date',{ascending:false}).limit(120);
+ if(error){el.textContent='Could not load history: '+cleanError(error);return;}
+ if(!data?.length){el.textContent='No saved records found for this store.';return;}
+ el.innerHTML='<div class="viewer-note" style="margin-bottom:8px">Draft and closed records are included. Select View Readings to see saved liter totalizers.</div>'
+  +'<div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Status</th><th>Liters</th><th>Details</th></tr></thead><tbody>'
+  +data.map(r=>'<tr><td>'+safeReviewText(r.business_date)+'</td><td>'+safeReviewText(r.status)+'</td><td>'+Number(r.total_liters||0).toFixed(2)+' L</td>'
+   +'<td><button type="button" style="padding:8px;font-size:13px" onclick="viewStoredFuelReadings(\''+r.business_date+'\')">'+(r.business_date===localDateISO()?'Today’s Record':'View Readings')+'</button></td></tr>').join('')
+  +'</tbody></table></div>';
 };
-
+window.viewStoredFuelReadings=function(day){
+ showPage('record');
+ if(day===localDateISO()){window.scrollTo({top:0,behavior:'smooth'});return;}
+ const picker=document.getElementById('priorRecordDate');if(picker)picker.value=day;
+ reviewPriorRecord();
+ document.getElementById('priorRecordCard')?.scrollIntoView({behavior:'smooth',block:'start'});
+};
 window.renderAdminOverview=async function(){
   const box=document.getElementById('adminStoreOverview'); if(!box||currentRole!=='admin')return;
   const {data,error}=await mcloiDb.from('mcloi_daily_records').select('store_id,status,business_date');
