@@ -1477,7 +1477,17 @@ async function applyOnlineAccess(){
 }
 
 window.changeStore=async function(){
-  currentStore=document.getElementById('activeStore').value;
+  const nextStore=document.getElementById('activeStore').value;
+  if(nextStore===currentStore)return;
+  // Back up the OLD store's form before altering store context.
+  if(currentRole==='admin'||currentRole==='personnel'){
+    clearTimeout(mcloiAutosaveTimer);
+    saveRecordLocalBackup();
+    await fuelSaveQueue.catch(()=>false);
+  }
+  ++draftLoadSequence; // Ignore in-flight reads from the previously selected store.
+  currentStore=nextStore;
+  fuelDraftConflict=null;
   document.getElementById('dashStoreName').textContent=prototypeStores.find(x=>x.id===currentStore)?.name||currentStore;
   await renderStorePrices();
   await loadOnlineSuppliers();
@@ -1485,7 +1495,7 @@ window.changeStore=async function(){
   await renderHistory();
   if(currentRole==='admin')await renderAdminOverview();
   if(currentRole==='bookkeeper'||currentRole==='admin')await renderBookkeeper();
-  calc(); showPage('dashboard');
+  calc();showPage('dashboard');
 };
 
 function getStorePrices(){ return mcloiPriceCache[currentStore] || {regular:0,premium:0,diesel:0}; }
