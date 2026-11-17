@@ -842,7 +842,7 @@ window.confirmClosingReading=async function(k){
  const raw=document.getElementById(k+'ClosingCandidate').value.trim();
  const proposed=Number(raw);
  if(!raw||!Number.isFinite(proposed)||proposed<0||!/^\d+(?:\.\d{1,2})?$/.test(raw)){alert('Enter a valid nonnegative liter totalizer with no more than 2 decimal places.');return;}
- if(hasMeterReading(k,'OL')&&proposed<val(k+'OL')){alert('Closing liters cannot exceed an already entered closing totalizer. Check both values.');return;}
+ if(hasMeterReading(k,'OL')&&proposed<val(k+'OL')){alert('Closing liters cannot be below the opening totalizer. Check both values.');return;}
  if(!file){setClosingPhotoStatus(k,'Select a new closing photo to confirm and save with the reading.',true);return;}
  if(state.photoPath&&!confirm('This fuel already has a saved closing photograph. Save a new photo reference for this date? The previous evidence file will remain stored.'))return;
  if(!mcloiSessionUser){setClosingPhotoStatus(k,'Sign in and connect online to save the closing photo.',true);return;}
@@ -1600,7 +1600,7 @@ function applyRecordToForm(record){
   document.getElementById('remarks').value=finance.remarks||'';
   deliveries=Array.isArray(record.deliveries)?record.deliveries:[];
   transactions=Array.isArray(record.transactions)?record.transactions:[];
-  renderDeliveries();renderTransactions();syncCashOut();calc();
+  renderDeliveries();renderTransactions();syncCashOut();calc();updatePhotoCount();
 }
 function recordLocalBackupKey(){ return storeKey('fuelOnlineDraftCache'); }
 function saveRecordLocalBackup(){
