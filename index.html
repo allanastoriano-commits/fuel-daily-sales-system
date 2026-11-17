@@ -1769,7 +1769,7 @@ async function saveFuelDraftVerified(options={}){
  const silent=!!options.silent;
  if(!(currentRole==='admin'||currentRole==='personnel')||!mcloiSessionUser)return false;
  if(fuelDraftConflict){if(!silent)alert('Resolve the phone/online reading conflict or closed-day lock before saving.');return false;}
- const r=getRecord(),store=currentStore,today=localDateISO(),userId=mcloiSessionUser.id;
+ const r=JSON.parse(JSON.stringify(getRecord())),store=currentStore,today=localDateISO(),userId=mcloiSessionUser.id;
  if(r.date!==today){if(!silent)alert('Past dates are read-only. Use History.');return false;}
  if(countedCash().invalid){if(!silent)alert('Correct invalid cash denomination counts or opening change fund.');return false;}
  // Snapshot the form BEFORE network I/O, and keep the latest device backup while saving.
@@ -1796,7 +1796,7 @@ async function saveFuelDraftVerified(options={}){
  }
  if(store!==currentStore||today!==localDateISO()){return true;}
  const current=getRecord();
- const unchanged=fuelReadingsKey(current)===fuelReadingsKey(r);
+ const unchanged=JSON.stringify(current)===JSON.stringify(r);
  if(unchanged){
   localStorage.setItem(recordLocalBackupKey(),JSON.stringify(r));
   saveDraftMeta({date:today,lastEdit:startLastEdit,lastSynced:startLastEdit});
