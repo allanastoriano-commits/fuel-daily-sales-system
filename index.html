@@ -615,7 +615,7 @@ function fuelHTML(k,n){
   return '<div class="card fuel"><h3>'+n+'</h3>'
    +'<div class="metric" style="text-align:left;margin-bottom:10px"><span>OFFICIAL SELLING PRICE FOR THIS RECORD</span><b id="'+k+'Price" style="font-size:22px">₱0.00 / L</b><div id="'+k+'PriceNote" style="font-size:12px;color:#65727e">Official store price</div></div>'
    +'<div class="grid"><div><label>Opening LITER Totalizer (L)</label><input id="'+k+'OL" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Morning liter reading" oninput="openingReadingEdited(\''+k+'\');calc()"></div>'
-   +'<div><label>Closing LITER Totalizer (L)</label><input id="'+k+'CL" type="number" min="0" step="0.01" inputmode="decimal" placeholder="End-of-day liter reading" oninput="calc()"></div></div>'
+   +'<div><label>Closing LITER Totalizer (L)</label><input id="'+k+'CL" type="number" min="0" step="0.01" inputmode="decimal" placeholder="End-of-day liter reading" oninput="closingReadingEdited(\''+k+'\');calc()"></div></div>'
    +'<div style="margin-top:12px;padding:12px;border:1px solid #dce2e7;border-radius:12px;background:#fafbfc"><b>Opening Totalizer Photo</b>' 
    +'<p style="font-size:13px;color:#65727e">Take a clear photo showing the LITER digits. The app can suggest a reading, but the cashier must check and confirm the number.</p>'
    +'<input id="'+k+'OpeningPhoto" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onchange="chooseOpeningPhoto(\''+k+'\',this)">'
@@ -627,7 +627,16 @@ function fuelHTML(k,n){
    +'</div>'
    +'<div class="grid" style="margin-top:10px"><div><label>Liters Sold — Auto</label><input id="'+k+'Liters" readonly></div><div><label>Total Sales (₱) — Auto</label><input id="'+k+'Sales" readonly></div></div>'
    +'<div id="'+k+'MeterStatus" style="margin-top:8px;font-size:13px;color:#65727e">Enter both liter readings.</div>'
-   +'<div style="margin-top:10px"><label>Closing Dispenser Photo</label><input id="'+k+'Photo" type="file" accept="image/*" capture="environment" onchange="previewPhoto(\''+k+'\',this)"><img class="photo" id="'+k+'Preview"></div></div>';
+   +'<div style="margin-top:12px;padding:12px;border:1px solid #dce2e7;border-radius:12px;background:#fafbfc"><b>Closing Totalizer Photo</b>' 
+   +'<p style="font-size:13px;color:#65727e">Take a clear photo showing the LITER digits. The app can suggest a reading, but the cashier must check and confirm the number.</p>'
+   +'<input id="'+k+'ClosingPhoto" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onchange="chooseClosingPhoto(\''+k+'\',this)">'
+   +'<img class="photo" id="'+k+'ClosingPreview" alt="Closing liter meter photo" style="max-height:230px">'
+   +'<button type="button" class="secondary" style="margin-top:9px" onclick="readClosingPhoto(\''+k+'\')">Read Digits from Photo</button>'
+   +'<div style="margin-top:9px"><label>Suggested Closing Liters (check or correct)</label><input id="'+k+'ClosingCandidate" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Reading appears here; edit if needed"></div>'
+   +'<button type="button" style="margin-top:9px" onclick="confirmClosingReading(\''+k+'\')">Confirm Reading & Save Closing Photo</button>'
+   +'<div id="'+k+'ClosingPhotoStatus" style="font-size:13px;color:#65727e;margin-top:8px" aria-live="polite">No closing photo saved yet. Manual entry also works.</div>'
+   +'</div>'
+   +'</div>';
 }
 document.getElementById('fuelCards').innerHTML=fuels.map(x=>fuelHTML(...x)).join('');
 document.getElementById('fuelCards').insertAdjacentHTML('beforebegin','<div class="viewer-note" style="margin-bottom:10px">Enter ONLY opening and closing LITER totalizers. The system multiplies liters sold by the official selling price. If a price changes during the day, use separate meter readings for each price period.</div><div id="meterWarning" style="margin-bottom:10px"></div>');
@@ -767,6 +776,116 @@ async function loadSavedOpeningPhotoPreview(k,path,store){
  if(state.photoPath!==path||store!==currentStore)return;
  const image=document.getElementById(k+'OpeningPreview');if(image){image.src=data.signedUrl;image.style.display='block';}
 }
+
+let closingPhotoState={};
+function setClosingPhotoStatus(k,message,isWarning=false){
+ const el=document.getElementById(k+'ClosingPhotoStatus');
+ if(el){el.textContent=message;el.style.color=isWarning?'#9a4b00':'#18794e';}
+}
+function getClosingPhotoState(k){
+ return closingPhotoState[k]||(closingPhotoState[k]={photoPath:null,confirmedReading:null,confirmedAt:null,previewUrl:null,busy:false,selection:0});
+}
+function clearClosingPhotoState(k){
+ const state=closingPhotoState[k];
+ if(state?.previewUrl){URL.revokeObjectURL(state.previewUrl);}
+ closingPhotoState[k]={photoPath:null,confirmedReading:null,confirmedAt:null,previewUrl:null,busy:false,selection:(state?.selection||0)+1};
+ const file=document.getElementById(k+'Photo');if(file)file.value='';
+ const img=document.getElementById(k+'Preview');if(img){img.removeAttribute('src');img.style.display='none';}
+ const candidate=document.getElementById(k+'ClosingCandidate');if(candidate)candidate.value='';
+ setClosingPhotoStatus(k,'No closing photo saved yet. Manual reading remains available.');
+}
+window.chooseClosingPhoto=function(k,input){
+ const state=getClosingPhotoState(k);
+ state.selection++;
+ const file=input.files?.[0];
+ if(file&&state.photoPath){state.confirmedReading=null;state.confirmedAt=null;}
+ const image=document.getElementById(k+'Preview');
+ if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null;}
+ const candidate=document.getElementById(k+'ClosingCandidate');
+ if(candidate)candidate.value='';
+ if(!file){setClosingPhotoStatus(k,state.photoPath?'Previous closing photo is saved.':'Select an closing photo to begin.');return;}
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024){
+  input.value='';
+  setClosingPhotoStatus(k,'Please select a JPEG, PNG, or WebP image under 10 MB.',true);return;
+ }
+ state.previewUrl=URL.createObjectURL(file);
+ image.src=state.previewUrl;image.style.display='block';
+ setClosingPhotoStatus(k,'Photo selected. Tap Read Digits, or enter the reading in the suggestion field and confirm.');
+};
+window.readClosingPhoto=async function(k){
+ if(!(currentRole==='admin'||currentRole==='personnel'))return;
+ const input=document.getElementById(k+'Photo'),file=input?.files?.[0],state=getClosingPhotoState(k);
+ if(!file){setClosingPhotoStatus(k,'Choose or photograph the closing totalizer first.',true);return;}
+ if(state.busy){setClosingPhotoStatus(k,'Photo reading is already running.');return;}
+ const mark=state.selection;state.busy=true;
+ setClosingPhotoStatus(k,'Reading the photo on this device. Ensure that the liter digits are visible...');
+ let worker;
+ try{
+  const tesseract=await loadOpeningOcrLibrary();
+  worker=await tesseract.createWorker('eng');
+  await worker.setParameters({tessedit_char_whitelist:'0123456789.,',tessedit_pageseg_mode:tesseract.PSM?.SINGLE_BLOCK||'6'});
+  const out=await worker.recognize(file);
+  if(mark!==getClosingPhotoState(k).selection)return;
+  const matches=meterCandidatesFromText(out.data?.text);
+  const candidate=document.getElementById(k+'ClosingCandidate');
+  if(matches.length===1){candidate.value=String(Number(matches[0]).toFixed(2));
+   setClosingPhotoStatus(k,'Suggested '+candidate.value+' L. CHECK the photograph and edit this number if necessary. Then tap Confirm Reading & Save Closing Photo.');}
+  else{candidate.value='';setClosingPhotoStatus(k,matches.length>1?'Several numbers found ('+matches.slice(0,5).join(', ')+'). Type the exact LITER totalizer from the photo in the suggestion field before confirming.':'No clear liter totalizer detected. Type the exact liter reading in the suggestion field and confirm.',true);}
+ }catch(err){if(mark===getClosingPhotoState(k).selection)setClosingPhotoStatus(k,'Automatic reading unavailable: '+(err.message||'unknown error')+'. Please type the reading in the suggestion field, then confirm.',true);}
+ finally{if(worker){try{await worker.terminate();}catch(e){console.warn('OCR worker cleanup',e)}}state.busy=false;}
+};
+window.confirmClosingReading=async function(k){
+ if(!(currentRole==='admin'||currentRole==='personnel')){alert('Only an authorized cashier or Admin can confirm readings.');return;}
+ const date=document.getElementById('date').value;
+ if(date!==localDateISO()){alert('Closing photos may only be saved to today’s active draft. Earlier dates are protected.');return;}
+ const state=getClosingPhotoState(k),file=document.getElementById(k+'Photo').files?.[0];
+ const raw=document.getElementById(k+'ClosingCandidate').value.trim();
+ const proposed=Number(raw);
+ if(!raw||!Number.isFinite(proposed)||proposed<0||!/^\d+(?:\.\d{1,2})?$/.test(raw)){alert('Enter a valid nonnegative liter totalizer with no more than 2 decimal places.');return;}
+ if(hasMeterReading(k,'OL')&&proposed<val(k+'OL')){alert('Closing liters cannot exceed an already entered closing totalizer. Check both values.');return;}
+ if(!file){setClosingPhotoStatus(k,'Select a new closing photo to confirm and save with the reading.',true);return;}
+ if(state.photoPath&&!confirm('This fuel already has a saved closing photograph. Save a new photo reference for this date? The previous evidence file will remain stored.'))return;
+ if(!mcloiSessionUser){setClosingPhotoStatus(k,'Sign in and connect online to save the closing photo.',true);return;}
+ if(state.busy){setClosingPhotoStatus(k,'The photo reader is still running. Try again after it finishes.',true);return;}
+ if(!confirm('Is '+proposed.toFixed(2)+' liters exactly what the CLOSING liter totalizer shows in this photo? Confirm after checking every digit.'))return;
+ const store=currentStore,sessionId=mcloiSessionUser.id;
+ const mark=state.selection;state.busy=true;
+ setClosingPhotoStatus(k,'Uploading the photo to secure storage...');
+ try{
+  const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type];
+  if(!ext||file.size>10*1024*1024)throw Error('Use a JPEG, PNG, or WebP photo under 10 MB.');
+  const path=store+'/'+date+'/'+sessionId+'/'+k+'-closing-'+Date.now()+'.'+ext;
+  const {error}=await mcloiDb.storage.from('mcloi-evidence').upload(path,file,{upsert:false,contentType:file.type});
+  if(error)throw Error(cleanError(error));
+  if(mark!==getClosingPhotoState(k).selection||store!==currentStore||date!==document.getElementById('date').value){
+    setClosingPhotoStatus(k,'Photo was uploaded, but the form changed. Reopen today’s record before confirming a reading.',true);return;
+  }
+  state.photoPath=path;state.confirmedReading=Number(proposed.toFixed(2));state.confirmedAt=new Date().toISOString();
+  document.getElementById(k+'CL').value=state.confirmedReading.toFixed(2);
+  calc();
+  saveRecordLocalBackup();
+  const saved=await window.saveDraft({silent:true});
+  setClosingPhotoStatus(k,saved?'Closing '+state.confirmedReading.toFixed(2)+' L confirmed. Photo and reading saved online.':'Photo uploaded. The reading is on this phone, but online draft sync failed. Check your connection and tap Save Draft.',!saved);
+ }catch(err){setClosingPhotoStatus(k,'Photo NOT saved: '+(err.message||'upload failed')+'. Check your internet and try again. The closing reading was not changed.',true);}
+ finally{state.busy=false;}
+};
+window.closingReadingEdited=function(k){
+ const state=getClosingPhotoState(k),reading=document.getElementById(k+'CL')?.value;
+ if(state.photoPath&&state.confirmedReading!==null&&(reading===''||!Number.isFinite(Number(reading))||Math.abs(Number(reading)-Number(state.confirmedReading))>0.004)){
+  state.confirmedReading=null;
+  state.confirmedAt=null;
+  setClosingPhotoStatus(k,'The closing value was changed after photo confirmation. The saved photo remains as evidence; recheck the reading before closing.',true);
+ }
+};
+async function loadSavedClosingPhotoPreview(k,path,store){
+ const state=getClosingPhotoState(k);
+ if(state.photoPath!==path||store!==currentStore)return;
+ const {data,error}=await mcloiDb.storage.from('mcloi-evidence').createSignedUrl(path,300);
+ if(error||!data?.signedUrl)return;
+ if(state.photoPath!==path||store!==currentStore)return;
+ const image=document.getElementById(k+'Preview');if(image){image.src=data.signedUrl;image.style.display='block';}
+}
+
 
 // A per-day price snapshot prevents later official price changes from silently repricing saved meter sales.
 let dailyFuelPriceSnapshot={};
@@ -1066,12 +1185,10 @@ function inventoryCalc(){
     document.getElementById(k+'StockVariance').value=measured?(variance>0?'+':'')+variance.toFixed(2)+' L':'Pending physical count';
   });
 }
-function previewPhoto(k,input){
- const img=document.getElementById(k+'Preview');
- if(input.files&&input.files[0]){img.src=URL.createObjectURL(input.files[0]);img.style.display='block'}
- updatePhotoCount();
+function updatePhotoCount(){
+ const c=fuels.filter(([k])=>!!getClosingPhotoState(k).photoPath||!!document.getElementById(k+'Photo').files.length).length;
+ document.getElementById('photoCount').textContent=c+'/3';
 }
-function updatePhotoCount(){let c=fuels.filter(([k])=>document.getElementById(k+'Photo').files.length).length;document.getElementById('photoCount').textContent=c+'/3'}
 function getRecord(){
   if(!date.value)setAutomaticDate(true);
   const record={date:date.value,user:user.value,closed:false,calculationMode:'liter_totalizers_x_price',fuels:{},
@@ -1085,7 +1202,11 @@ function getRecord(){
       closingLiters:hasMeterReading(k,'CL')?val(k+'CL'):null,
       openingAmount:0,closingAmount:0,unitPrice:entered?result.price:null,
       litersSold:result.liters,sales:result.sales,calculationMode:'liter_totalizers_x_price',
-      photoAttached:document.getElementById(k+'Photo').files.length>0,
+      photoAttached:!!getClosingPhotoState(k).photoPath||document.getElementById(k+'Photo').files.length>0,
+      photoPath:getClosingPhotoState(k).photoPath,
+      closingPhotoPath:getClosingPhotoState(k).photoPath,
+      closingPhotoConfirmedReading:getClosingPhotoState(k).confirmedReading,
+      closingPhotoConfirmedAt:getClosingPhotoState(k).confirmedAt,
       openingPhotoPath:getOpeningPhotoState(k).photoPath,
       openingPhotoConfirmedReading:getOpeningPhotoState(k).confirmedReading,
       openingPhotoConfirmedAt:getOpeningPhotoState(k).confirmedAt};
@@ -1437,6 +1558,7 @@ function clearRecordForm(){
     const image=document.getElementById(k+'Preview');if(image){image.src='';image.style.display='none';}
     const file=document.getElementById(k+'Photo');if(file)file.value='';
     clearOpeningPhotoState(k);
+    clearClosingPhotoState(k);
   });
   ['cashSales','gcashSales','creditSales','otherSales','cashIn','actualCash'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   clearCashCount();
@@ -1451,6 +1573,14 @@ function applyRecordToForm(record){
     const fuel=record.fuels?.[k]||{},inv=record.inventory?.[k]||{};
     document.getElementById(k+'OL').value=fuel.openingLiters??'';
     document.getElementById(k+'CL').value=fuel.closingLiters??'';
+    const closing=getClosingPhotoState(k);
+    closing.photoPath=fuel.closingPhotoPath||fuel.photoPath||null;
+    closing.confirmedReading=fuel.closingPhotoConfirmedReading??null;
+    closing.confirmedAt=fuel.closingPhotoConfirmedAt||null;
+    if(closing.photoPath){
+      setClosingPhotoStatus(k,closing.confirmedReading!==null?'Saved photo confirms '+Number(closing.confirmedReading).toFixed(2)+' L.':'Closing photo saved without a verified reading.');
+      loadSavedClosingPhotoPreview(k,closing.photoPath,currentStore);
+    }
     const state=getOpeningPhotoState(k);
     state.photoPath=fuel.openingPhotoPath||null;
     state.confirmedReading=fuel.openingPhotoConfirmedReading??null;
@@ -1633,13 +1763,8 @@ function scheduleOnlineAutosave(delay=900){
 })();
 
 async function uploadClosingPhotos(r){
-  for(const [k,n] of fuels){
-    const input=document.getElementById(k+'Photo'); if(!input?.files?.[0])continue;
-    const file=input.files[0]; const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-zA-Z0-9]/g,'').toLowerCase()||'jpg';
-    const path=`${currentStore}/${r.date}/${mcloiSessionUser.id}/${k}-${Date.now()}.${ext}`;
-    const {error}=await mcloiDb.storage.from('mcloi-evidence').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
-    if(error)throw error; r.fuels[k].photoPath=path; r.fuels[k].photoAttached=true;
-  }
+ // Photo already uploaded and linked when the cashier confirmed the closing digits.
+ return r;
 }
 
 window.closeDay=async function(){
@@ -1654,7 +1779,13 @@ window.closeDay=async function(){
       if(!confirm(n+' price changed since this day started. The saved rate is '+peso(reading.price)+'/L. If price changed during sales you need separate meter readings for each price period. Continue only if the saved rate applied to all liters.'))return;
     }
   }
-  const missing=fuels.filter(([k])=>!document.getElementById(k+'Photo').files.length); if(missing.length && !confirm('One or more closing dispenser photos are missing. Close the day anyway?'))return;
+  for(const [k,n] of fuels){
+    const photo=getClosingPhotoState(k),pending=document.getElementById(k+'Photo').files?.[0];
+    if(pending&&!photo.photoPath){alert(n+': A closing photo is selected but not confirmed. Tap Confirm Reading & Save Closing Photo first.');return;}
+    if(photo.photoPath&&(photo.confirmedReading===null||!photo.confirmedAt||Math.abs(Number(photo.confirmedReading)-val(k+'CL'))>0.004)){alert(n+': Saved closing photo is not verified against the current reading. Confirm the photo and reading before locking.');return;}
+  }
+  const missing=fuels.filter(([k])=>!getClosingPhotoState(k).photoPath);
+  if(missing.length&&!confirm('No confirmed closing photo for '+missing.map(x=>x[1]).join(', ')+'. Continue using manually entered readings WITHOUT photo evidence?'))return;
   const disp=salesTotal(),pay=val('cashSales')+val('gcashSales')+val('creditSales')+val('otherSales'); if(Math.abs(pay-disp)>0.009&&!document.getElementById('remarks').value.trim()){alert('Payment total does not match dispenser sales. Enter a remarks/explanation before closing.');return;}
   if(countedCash().invalid){alert('Correct the invalid bill or coin counts and opening float before closing.');return;}
   if(!r.cashCount?.confirmed){alert('Count and confirm all cash denominations before closing.');return;}
