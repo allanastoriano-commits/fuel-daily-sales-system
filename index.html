@@ -132,6 +132,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
 </div>
  <div class="card"><h2>Daily Record</h2><div class="grid"><div><label>Date</label><input type="date" id="date" readonly><small id="dateHelp" class="muted">Date is set automatically. Only Admin can correct it manually.</small></div><div><label>Recorder / User</label><input id="user" placeholder="Name"></div></div></div>
 
+ <div class="viewer-note" id="dailyRecoveryStatus" style="margin-bottom:10px" aria-live="polite">Meter readings are restored from today’s saved draft for the selected store.</div>
  <div class="card" id="priorRecordCard">
   <h2>Review Earlier Online Records</h2>
   <p class="muted">Today's Record form is separate from earlier dates. View previous purchases and inventory below without changing either day's data.</p>
@@ -245,7 +246,8 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
  <div class="card">
   <h2>Daily Total</h2>
   <div class="row3"><div class="metric"><b id="totalAmount">₱0.00</b><span>SALES</span></div><div class="metric"><b id="totalLiters">0.00 L</b><span>LITERS SOLD</span></div><div class="metric"><b id="photoCount">0/3</b><span>PHOTOS</span></div></div>
-  <div style="height:10px"></div><button onclick="saveDraft()">Save Draft</button>
+  <div style="height:10px"></div><button onclick="saveDraft()">Save Draft & Verify Online</button>
+  <div style="height:8px"></div><button type="button" class="secondary" onclick="loadDraft()">Retrieve Today’s Saved Readings</button>
   <div style="height:8px"></div><button class="danger" onclick="closeDay()">Close & Lock Day</button>
   <div id="saveStatus"></div>
  </div>
@@ -1599,45 +1601,98 @@ function applyRecordToForm(record){
   transactions=Array.isArray(record.transactions)?record.transactions:[];
   renderDeliveries();renderTransactions();syncCashOut();calc();updatePhotoCount();
 }
-function recordLocalBackupKey(){ return storeKey('fuelOnlineDraftCache'); }
+function recordLocalBackupKey(){return storeKey('fuelOnlineDraftCache');}
+function draftMetaKey(){return storeKey('fuelDraftMeta');}
+function draftMeta(){try{return JSON.parse(localStorage.getItem(draftMetaKey())||'{}');}catch(e){return {};}}
+function saveDraftMeta(meta){try{localStorage.setItem(draftMetaKey(),JSON.stringify(meta))}catch(e){console.warn('Draft metadata save failed',e)}}
+function recoveryMessage(text,isWarning=false){
+ const el=document.getElementById('dailyRecoveryStatus');if(!el)return;
+ el.textContent=text;el.style.background=isWarning?'#fff3e8':'#eef6f1';el.style.color=isWarning?'#9a4b00':'#18794e';
+}
+function fuelReadingsKey(r){
+ return JSON.stringify(['regular','premium','diesel'].map(k=>[r?.fuels?.[k]?.openingLiters??null,r?.fuels?.[k]?.closingLiters??null,
+ r?.fuels?.[k]?.openingPhotoPath??null,r?.fuels?.[k]?.closingPhotoPath??null]));
+}
+function fuelReadingCount(r){return ['regular','premium','diesel'].reduce((n,k)=>n+(r?.fuels?.[k]?.openingLiters!=null?1:0)+(r?.fuels?.[k]?.closingLiters!=null?1:0),0);}
+let fuelDraftConflict=null;
+
 function saveRecordLocalBackup(){
-  if(!(currentRole==='admin'||currentRole==='personnel'))return;
-  try{
-    const r=getRecord();
-    r.user=currentUser;
-    localStorage.setItem(recordLocalBackupKey(),JSON.stringify(r));
-  }catch(e){ console.warn('Local draft backup failed',e); }
+ if(!(currentRole==='admin'||currentRole==='personnel'))return;
+ try{
+  const r=getRecord();if(r.date!==localDateISO())return;
+  r.user=currentUser;
+  localStorage.setItem(recordLocalBackupKey(),JSON.stringify(r));
+  const m=draftMeta();m.date=r.date;m.lastEdit=Date.now();saveDraftMeta(m);
+ }catch(e){console.warn('Local draft backup failed',e);}
 }
 function readRecordLocalBackup(){
-  try{return JSON.parse(localStorage.getItem(recordLocalBackupKey())||'null')}catch(e){return null}
+ try{return JSON.parse(localStorage.getItem(recordLocalBackupKey())||'null');}catch(e){return null;}
 }
-
+let draftLoadSequence=0;
 async function loadOnlineDraft(){
-  if(!mcloiSessionUser)return;
-  const today=localDateISO(); setAutomaticDate(true);
-  const local=readRecordLocalBackup();
-  const {data,error}=await mcloiDb.from('mcloi_daily_records').select('record_data,business_date,status').eq('store_id',currentStore).eq('business_date',today).eq('status','draft').maybeSingle();
-  if(error){
-    console.warn(error);
-    if(local && local.date===today){
-      applyRecordToForm(local);
-      const st=document.getElementById('saveStatus'); if(st)st.innerHTML='<div class="status">Restored from this phone. Online sync will retry automatically.</div>';
-    }else{
-      clearRecordForm(); document.getElementById('date').value=today; document.getElementById('user').value=currentUser;
-    }
-    return;
-  }
-  if(data?.record_data){
-    applyRecordToForm(data.record_data);
-    localStorage.setItem(recordLocalBackupKey(),JSON.stringify(data.record_data));
-  } else if(local && local.date===today){
-    applyRecordToForm(local);
-    const st=document.getElementById('saveStatus'); if(st)st.innerHTML='<div class="status">Restored from this phone and preparing online sync.</div>';
-    setTimeout(()=>window.saveDraft({silent:true}),150);
-  } else {
-    clearRecordForm(); document.getElementById('date').value=today; document.getElementById('user').value=currentUser;
-  }
+ if(!mcloiSessionUser)return;
+ const call=++draftLoadSequence,today=localDateISO(),store=currentStore;
+ setAutomaticDate(true);
+ const local=readRecordLocalBackup(),meta=draftMeta();
+ const {data,error}=await mcloiDb.from('mcloi_daily_records')
+  .select('record_data,business_date,status,updated_at').eq('store_id',store).eq('business_date',today).maybeSingle();
+ if(call!==draftLoadSequence||store!==currentStore)return;
+ const st=document.getElementById('saveStatus');
+ if(error){
+  if(local?.date===today){applyRecordToForm(local);recoveryMessage('Offline: restored '+fuelReadingCount(local)+' readings from this phone. Online save still pending.',true);}
+  else{clearRecordForm();recoveryMessage('Cannot retrieve saved readings from the online database for '+store+'. Check internet before entering new values.',true);}
+  if(st)st.textContent='Online retrieval failed: '+cleanError(error);return;
+ }
+ if(data?.status==='closed'){
+  fuelDraftConflict={type:'closed',store,date:today};
+  clearRecordForm();recoveryMessage('This day is already CLOSED for '+store+'. View History rather than replacing it.',true);return;
+ }
+ const online=data?.record_data||null,validLocal=local?.date===today;
+ const differs=!!online&&validLocal&&fuelReadingsKey(local)!==fuelReadingsKey(online);
+ const unsynced=validLocal&&(Number(meta.lastEdit||0)>Number(meta.lastSynced||0)+1);
+ if(differs&&(unsynced||(!meta.lastSynced&&fuelReadingCount(local)>0))){
+  fuelDraftConflict={type:'conflict',store,date:today,online};
+  applyRecordToForm(local);
+  recoveryMessage('Your PHONE draft has '+fuelReadingCount(local)+' readings but the ONLINE draft has '+fuelReadingCount(online)+'. Neither was discarded. Choose which to keep below.',true);
+  if(st)st.innerHTML='<div style="padding:10px;border:1px solid #cf9d6d;border-radius:10px">'
+   +'<b>Phone and online records differ.</b>'
+   +'<button type="button" style="margin-top:8px" onclick="resolveFuelDraftConflict(\'phone\')">Keep Phone Readings & Save Online</button>'
+   +'<button type="button" class="secondary" style="margin-top:8px" onclick="resolveFuelDraftConflict(\'online\')">Use Online Readings</button></div>';
+  return;
+ }
+ fuelDraftConflict=null;
+ if(online){
+  applyRecordToForm(online);
+  localStorage.setItem(recordLocalBackupKey(),JSON.stringify(online));
+  saveDraftMeta({date:today,lastEdit:Date.now(),lastSynced:Date.now()});
+  recoveryMessage('Retrieved '+fuelReadingCount(online)+' meter readings from the ONLINE database for '+store+' on '+today+'.');
+ }else if(validLocal){
+  applyRecordToForm(local);
+  recoveryMessage('Restored '+fuelReadingCount(local)+' readings from this phone for '+store+'. Tap Save Draft & Verify Online.',true);
+ }else{
+  clearRecordForm();recoveryMessage('No meter readings saved for '+store+' on '+today+'. Start a new draft.');
+ }
+ if(st)st.textContent='';
 }
+window.resolveFuelDraftConflict=async function(choice){
+ const conflict=fuelDraftConflict;
+ if(!conflict||conflict.type!=='conflict'||conflict.store!==currentStore||conflict.date!==localDateISO())return;
+ if(choice==='phone'){
+  if(!confirm('Save currently displayed PHONE readings online? This will replace the online draft for today.'))return;
+  fuelDraftConflict=null;
+  await window.saveDraft({silent:false});
+ }else if(choice==='online'){
+  if(!confirm('Restore ONLINE readings? The phone draft will be stored in a separate recovery backup.'))return;
+  try{localStorage.setItem(recordLocalBackupKey()+'__recovery__'+Date.now(),JSON.stringify(readRecordLocalBackup()))}catch(e){}
+  const remote=conflict.online;fuelDraftConflict=null;
+  applyRecordToForm(remote);
+  localStorage.setItem(recordLocalBackupKey(),JSON.stringify(remote));
+  saveDraftMeta({date:localDateISO(),lastEdit:Date.now(),lastSynced:Date.now()});
+  recoveryMessage('Restored '+fuelReadingCount(remote)+' ONLINE readings for '+currentStore+'.');
+  const st=document.getElementById('saveStatus');if(st)st.textContent='Online record retrieved successfully.';
+ }
+};
+
 window.loadDraft=loadOnlineDraft;
 
 function safeReviewText(v){
