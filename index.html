@@ -1748,44 +1748,57 @@ function recordTotals(r){
   const actual=count?.confirmed?Number(count.total||0):0;return {totalSales,totalLiters,expected,actual,variance:count?.confirmed?roundFuel(actual-expected):0};
 }
 
-window.saveDraft=async function(options={}){
-  const silent=!!options.silent;
-  if(!(currentRole==='admin'||currentRole==='personnel')){
-    if(!silent)alert('This role cannot save daily records.');
-    return false;
-  }
-  if(!mcloiSessionUser)return false;
-  const r=getRecord();
-  if(countedCash().invalid){const msg='Invalid bill/coin quantities or opening float. Correct these values before saving.';if(!silent)alert(msg);return false;}
-  if(r.date!==localDateISO()){
-    const msg='Past dates are protected from automatic saving. Review earlier dates without replacing saved inventory or deliveries.';
-    const status=document.getElementById('saveStatus');
-    if(status)status.textContent=msg;
-    if(!silent)alert(msg);
-    return false;
-  }
-  saveRecordLocalBackup();
-  const t=recordTotals(r); r.user=currentUser;
-  const payload={store_id:currentStore,business_date:r.date,status:'draft',cashier_name:currentUser,record_data:r,total_sales:t.totalSales,total_liters:t.totalLiters,expected_cash:t.expected,actual_cash:t.actual,cash_variance:t.variance,updated_by:mcloiSessionUser.id,created_by:mcloiSessionUser.id};
-  const {error}=await mcloiDb.from('mcloi_daily_records').upsert(payload,{onConflict:'store_id,business_date'});
-  const st=document.getElementById('saveStatus');
-  if(error){
-    if(!silent)alert('Draft could not be saved online: '+cleanError(error));
-    else if(st)st.innerHTML='<div style="font-size:13px;color:#9a4b00;margin-top:8px">Auto-save could not sync yet. Keep the app open and check your connection.</div>';
-    return false;
-  }
-  localStorage.setItem(recordLocalBackupKey(),JSON.stringify(r));
-  if(st){
-    if(silent){
-      const now=new Date().toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'});
-      st.innerHTML='<div class="status">Auto-saved online at '+now+'.</div>';
-    }else{
-      st.innerHTML='<div class="status">Draft saved online and synchronized.</div>';
-    }
-  }
-  return true;
+// Queue all saves (manual and automatic) so a slower earlier request cannot overwrite a newer entry.
+let fuelSaveQueue=Promise.resolve();
+window.saveDraft=function(options={}){
+ const work=fuelSaveQueue.catch(()=>false).then(()=>saveFuelDraftVerified(options));
+ fuelSaveQueue=work.catch(err=>{console.warn('Fuel save queue failed',err);return false;});
+ return work;
 };
-
+async function saveFuelDraftVerified(options={}){
+ const silent=!!options.silent;
+ if(!(currentRole==='admin'||currentRole==='personnel')||!mcloiSessionUser)return false;
+ if(fuelDraftConflict){if(!silent)alert('Resolve the phone/online reading conflict or closed-day lock before saving.');return false;}
+ const r=getRecord(),store=currentStore,today=localDateISO(),userId=mcloiSessionUser.id;
+ if(r.date!==today){if(!silent)alert('Past dates are read-only. Use History.');return false;}
+ if(countedCash().invalid){if(!silent)alert('Correct invalid cash denomination counts or opening change fund.');return false;}
+ // Snapshot the form BEFORE network I/O, and keep the latest device backup while saving.
+ saveRecordLocalBackup();
+ const meta=draftMeta(),startLastEdit=Number(meta.lastEdit||0);
+ const totals=recordTotals(r);
+ const payload={store_id:store,business_date:r.date,status:'draft',cashier_name:currentUser,record_data:r,
+  total_sales:totals.totalSales,total_liters:totals.totalLiters,expected_cash:totals.expected,actual_cash:totals.actual,cash_variance:totals.variance,
+  updated_by:userId,created_by:userId};
+ const status=document.getElementById('saveStatus');
+ if(status&&!silent)status.textContent='Saving and verifying today’s meter readings online...';
+ const {data,error}=await mcloiDb.from('mcloi_daily_records').upsert(payload,{onConflict:'store_id,business_date'})
+  .select('record_data,status,updated_at,store_id,business_date').maybeSingle();
+ if(error||!data){
+  const msg='Not confirmed online: '+(error?cleanError(error):'No saved row returned.');
+  if(status)status.textContent=msg+' Your phone backup is kept.';
+  recoveryMessage('This draft is saved on the phone but NOT verified online. Retry Save Draft after restoring the connection.',true);
+  if(!silent)alert(msg);return false;
+ }
+ if(data.status!=='draft'||data.store_id!==store||data.business_date!==today||fuelReadingsKey(data.record_data)!==fuelReadingsKey(r)){
+  if(status)status.textContent='Saved data did not match the requested readings. Phone backup preserved. Please retry.';
+  recoveryMessage('Online verification failed: stored readings differ from this phone. No success confirmation was issued.',true);
+  return false;
+ }
+ if(store!==currentStore||today!==localDateISO()){return true;}
+ const current=getRecord();
+ const unchanged=fuelReadingsKey(current)===fuelReadingsKey(r);
+ if(unchanged){
+  localStorage.setItem(recordLocalBackupKey(),JSON.stringify(r));
+  saveDraftMeta({date:today,lastEdit:startLastEdit,lastSynced:startLastEdit});
+  recoveryMessage('ONLINE VERIFIED: '+fuelReadingCount(r)+' meter reading(s) saved for '+store+' on '+today+'.');
+  if(status){const now=new Date().toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'});status.textContent='Saved and VERIFIED online at '+now+' • '+fuelReadingCount(r)+' readings.';}
+ }else{
+  // A value changed while an upload was running: keep the newer phone draft, then queue a fresh save.
+  recoveryMessage('Newer changes exist on this phone. Saving the latest readings...',true);
+  scheduleOnlineAutosave(200);
+ }
+ return true;
+}
 
 let mcloiAutosaveTimer=null;
 let mcloiAutosaveRunning=false;
