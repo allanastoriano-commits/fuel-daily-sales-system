@@ -791,8 +791,8 @@ function clearClosingPhotoState(k){
  const state=closingPhotoState[k];
  if(state?.previewUrl){URL.revokeObjectURL(state.previewUrl);}
  closingPhotoState[k]={photoPath:null,confirmedReading:null,confirmedAt:null,previewUrl:null,busy:false,selection:(state?.selection||0)+1};
- const file=document.getElementById(k+'Photo');if(file)file.value='';
- const img=document.getElementById(k+'Preview');if(img){img.removeAttribute('src');img.style.display='none';}
+ const file=document.getElementById(k+'ClosingPhoto');if(file)file.value='';
+ const img=document.getElementById(k+'ClosingPreview');if(img){img.removeAttribute('src');img.style.display='none';}
  const candidate=document.getElementById(k+'ClosingCandidate');if(candidate)candidate.value='';
  setClosingPhotoStatus(k,'No closing photo saved yet. Manual reading remains available.');
 }
@@ -801,7 +801,7 @@ window.chooseClosingPhoto=function(k,input){
  state.selection++;
  const file=input.files?.[0];
  if(file&&state.photoPath){state.confirmedReading=null;state.confirmedAt=null;}
- const image=document.getElementById(k+'Preview');
+ const image=document.getElementById(k+'ClosingPreview');
  if(state.previewUrl){URL.revokeObjectURL(state.previewUrl);state.previewUrl=null;}
  const candidate=document.getElementById(k+'ClosingCandidate');
  if(candidate)candidate.value='';
@@ -816,7 +816,7 @@ window.chooseClosingPhoto=function(k,input){
 };
 window.readClosingPhoto=async function(k){
  if(!(currentRole==='admin'||currentRole==='personnel'))return;
- const input=document.getElementById(k+'Photo'),file=input?.files?.[0],state=getClosingPhotoState(k);
+ const input=document.getElementById(k+'ClosingPhoto'),file=input?.files?.[0],state=getClosingPhotoState(k);
  if(!file){setClosingPhotoStatus(k,'Choose or photograph the closing totalizer first.',true);return;}
  if(state.busy){setClosingPhotoStatus(k,'Photo reading is already running.');return;}
  const mark=state.selection;state.busy=true;
@@ -840,7 +840,7 @@ window.confirmClosingReading=async function(k){
  if(!(currentRole==='admin'||currentRole==='personnel')){alert('Only an authorized cashier or Admin can confirm readings.');return;}
  const date=document.getElementById('date').value;
  if(date!==localDateISO()){alert('Closing photos may only be saved to today’s active draft. Earlier dates are protected.');return;}
- const state=getClosingPhotoState(k),file=document.getElementById(k+'Photo').files?.[0];
+ const state=getClosingPhotoState(k),file=document.getElementById(k+'ClosingPhoto')?.files?.[0];
  const raw=document.getElementById(k+'ClosingCandidate').value.trim();
  const proposed=Number(raw);
  if(!raw||!Number.isFinite(proposed)||proposed<0||!/^\d+(?:\.\d{1,2})?$/.test(raw)){alert('Enter a valid nonnegative liter totalizer with no more than 2 decimal places.');return;}
@@ -885,7 +885,7 @@ async function loadSavedClosingPhotoPreview(k,path,store){
  const {data,error}=await mcloiDb.storage.from('mcloi-evidence').createSignedUrl(path,300);
  if(error||!data?.signedUrl)return;
  if(state.photoPath!==path||store!==currentStore)return;
- const image=document.getElementById(k+'Preview');if(image){image.src=data.signedUrl;image.style.display='block';}
+ const image=document.getElementById(k+'ClosingPreview');if(image){image.src=data.signedUrl;image.style.display='block';}
 }
 
 
@@ -1188,7 +1188,7 @@ function inventoryCalc(){
   });
 }
 function updatePhotoCount(){
- const c=fuels.filter(([k])=>!!getClosingPhotoState(k).photoPath||!!document.getElementById(k+'Photo').files.length).length;
+ const c=fuels.filter(([k])=>!!getClosingPhotoState(k).photoPath||!!document.getElementById(k+'ClosingPhoto')?.files?.length).length;
  document.getElementById('photoCount').textContent=c+'/3';
 }
 function getRecord(){
@@ -1204,7 +1204,7 @@ function getRecord(){
       closingLiters:hasMeterReading(k,'CL')?val(k+'CL'):null,
       openingAmount:0,closingAmount:0,unitPrice:entered?result.price:null,
       litersSold:result.liters,sales:result.sales,calculationMode:'liter_totalizers_x_price',
-      photoAttached:!!getClosingPhotoState(k).photoPath||document.getElementById(k+'Photo').files.length>0,
+      photoAttached:!!getClosingPhotoState(k).photoPath||!!document.getElementById(k+'ClosingPhoto')?.files?.length,
       photoPath:getClosingPhotoState(k).photoPath,
       closingPhotoPath:getClosingPhotoState(k).photoPath,
       closingPhotoConfirmedReading:getClosingPhotoState(k).confirmedReading,
@@ -1564,8 +1564,8 @@ function clearRecordForm(){
   dailyFuelPriceSnapshot={};
   fuels.forEach(([k])=>{
     ['OL','CL','BeginStock','ActualStock'].forEach(s=>{const el=document.getElementById(k+s);if(el)el.value='';});
-    const image=document.getElementById(k+'Preview');if(image){image.src='';image.style.display='none';}
-    const file=document.getElementById(k+'Photo');if(file)file.value='';
+    const image=document.getElementById(k+'ClosingPreview');if(image){image.src='';image.style.display='none';}
+    const file=document.getElementById(k+'ClosingPhoto');if(file)file.value='';
     clearOpeningPhotoState(k);
     clearClosingPhotoState(k);
   });
@@ -1879,7 +1879,7 @@ window.closeDay=async function(){
     }
   }
   for(const [k,n] of fuels){
-    const photo=getClosingPhotoState(k),pending=document.getElementById(k+'Photo').files?.[0];
+    const photo=getClosingPhotoState(k),pending=document.getElementById(k+'ClosingPhoto')?.files?.[0];
     if(pending&&!photo.photoPath){alert(n+': A closing photo is selected but not confirmed. Tap Confirm Reading & Save Closing Photo first.');return;}
     if(photo.photoPath&&(photo.confirmedReading===null||!photo.confirmedAt||Math.abs(Number(photo.confirmedReading)-val(k+'CL'))>0.004)){alert(n+': Saved closing photo is not verified against the current reading. Confirm the photo and reading before locking.');return;}
   }
