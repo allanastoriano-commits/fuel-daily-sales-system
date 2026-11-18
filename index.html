@@ -143,6 +143,36 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
   <div id="priorRecordResult" style="margin-top:10px"></div>
  </div>
  <div id="fuelCards"></div>
+
+ <div class="card" id="wholesaleCard">
+  <h2>Wholesale Fuel Sales — 20-Liter Containers</h2>
+  <p class="muted"><b>Filled directly through the dispenser.</b> Containers are already included in opening-to-closing meter liters. Do not deduct them twice from inventory.</p>
+  <div class="grid">
+   <div><label>Fuel Type</label><select id="whFuel"><option>Regular</option><option>Premium</option><option>Diesel</option></select></div>
+   <div><label>Containers Sold (20 L each)</label><input id="whCount" type="number" min="1" step="1" inputmode="numeric" oninput="previewWholesale()" placeholder="Quantity"></div>
+   <div><label>Selling Price / Container (₱)</label><input id="whSell" type="number" min="0" step="0.01" inputmode="decimal" oninput="previewWholesale()" placeholder="Price per container"></div>
+   <div><label>Unit Cost / Container (₱)</label><input id="whCost" type="number" min="0" step="0.01" inputmode="decimal" oninput="previewWholesale()" placeholder="Fuel cost of 20 L"></div>
+   <div><label>Payment Method</label><select id="whPayment"><option value="Cash">Cash</option><option value="GCash/Bank">GCash / Bank</option><option value="Credit">Credit / Utang</option><option value="Other">Other Non-Cash</option></select></div>
+   <div><label>Buyer (optional)</label><input id="whCustomer" placeholder="Customer name"></div>
+   <div><label>Receipt / Reference (optional)</label><input id="whRef" placeholder="Receipt or transaction reference"></div>
+  </div>
+  <small class="muted">Unit cost represents fuel cost for 20 L. Include packaging cost in this amount if it is not reusable and you want it included in gross profit.</small>
+  <div class="row3" style="margin-top:12px">
+   <div class="metric"><b id="whPreviewLiters">0.00 L</b><span>LITERS</span></div>
+   <div class="metric"><b id="whPreviewSales">₱0.00</b><span>GROSS SALES</span></div>
+   <div class="metric"><b id="whPreviewProfit">₱0.00</b><span>GROSS PROFIT</span></div>
+  </div>
+  <div id="whPreviewNote" class="muted" style="margin-top:8px">Enter quantity and prices to preview.</div>
+  <button type="button" style="margin-top:10px" onclick="addWholesaleSale()">Add Wholesale Sale</button>
+  <div id="wholesaleList"></div>
+  <div class="row3" style="margin-top:12px">
+   <div class="metric"><b id="whTotalContainers">0</b><span>CONTAINERS</span></div>
+   <div class="metric"><b id="whTotalLiters">0.00 L</b><span>WHOLESALE LITERS IN DISPENSER</span></div>
+   <div class="metric"><b id="whTotalSales">₱0.00</b><span>WHOLESALE SALES</span></div>
+  </div>
+  <div class="metric" style="margin-top:10px"><b id="whTotalProfit">₱0.00</b><span>TOTAL WHOLESALE GROSS PROFIT</span></div>
+  <small class="muted">Sales are kept in the daily online draft. Voided transactions remain visible. Cash/GCash/credit are included in reconciliation automatically.</small>
+ </div>
  <div class="card">
   <h2>Fuel Deliveries & Inventory</h2>
   <p><small>Fuel purchases are recorded separately from ordinary expenses because they affect both cash and fuel inventory.</small></p>
@@ -215,19 +245,19 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
   <p><small>The totals below automatically feed into cash reconciliation.</small></p>
  </div>
  <div class="card">
-  <h2>Payments & Cash Reconciliation</h2>
+  <h2>Payments & Cash Reconciliation</h2><p class="muted">Enter regular-price RETAIL receipts only. Wholesale payments are added automatically—do not enter them twice.</p>
   <div class="grid">
-   <div><label>Cash Sales (₱)</label><input id="cashSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
-   <div><label>GCash / E-wallet (₱)</label><input id="gcashSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
-   <div><label>Credit / Utang Sales (₱)</label><input id="creditSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
-   <div><label>Other Payments (₱)</label><input id="otherSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>Retail Cash Sales (₱)</label><input id="cashSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>Retail GCash / E-wallet (₱)</label><input id="gcashSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>Retail Credit / Utang (₱)</label><input id="creditSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
+   <div><label>Other Retail Payments (₱)</label><input id="otherSales" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
   </div>
   <div style="margin-top:12px" class="row3">
    <div class="metric"><b id="paymentsTotal">₱0.00</b><span>TOTAL PAYMENTS</span></div>
    <div class="metric"><b id="dispenserTotal">₱0.00</b><span>CALCULATED FUEL SALES</span></div>
    <div class="metric"><b id="salesDiff">₱0.00</b><span>DIFFERENCE</span></div>
   </div>
-  <div id="paymentWarning"></div>
+  <div id="paymentWarning"></div><div id="wholesalePaymentDetail" class="muted" style="margin-top:8px"></div>
   <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
   <div class="grid">
    <div><label>Additional Cash In (₱)</label><input id="cashIn" type="number" step="0.01" inputmode="decimal" oninput="reconcile()"></div>
@@ -244,7 +274,7 @@ small{color:var(--muted)} .tx{padding:10px;border:1px solid var(--line);border-r
  <div class="card" id="cashCountCard"><h2>Closing Cash Count — Bills and Coins</h2><p class="muted">Count the drawer BEFORE giving cash to the Main Cashier. Include change money left in the drawer. Enter pieces per denomination.</p>
 <div class="grid"><div><label>Opening Change Fund (₱)</label><input id="openingCashFloat" type="number" min="0" step="0.01" inputmode="decimal" oninput="updateCashCount()" placeholder="0.00"><small>Cash for change, not sales</small></div><div><label>Counted by (Cashier)</label><input id="cashCountBy" oninput="updateCashCount()" placeholder="Cashier name"></div></div><h3 style="margin-top:14px">Peso Bills</h3><div class="grid"><div><label>₱1,000 — Pieces</label><input id="cashQty_1000" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱500 — Pieces</label><input id="cashQty_500" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱200 — Pieces</label><input id="cashQty_200" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱100 — Pieces</label><input id="cashQty_100" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱50 — Pieces</label><input id="cashQty_50" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱20 bill — Pieces</label><input id="cashQty_20b" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div></div><h3 style="margin-top:14px">Peso Coins</h3><div class="grid"><div><label>₱20 coin — Pieces</label><input id="cashQty_20c" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱10 — Pieces</label><input id="cashQty_10" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱5 — Pieces</label><input id="cashQty_5" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱1 — Pieces</label><input id="cashQty_1" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱0.25 — Pieces</label><input id="cashQty_025" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱0.10 — Pieces</label><input id="cashQty_010" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱0.05 — Pieces</label><input id="cashQty_005" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div><div><label>₱0.01 — Pieces</label><input id="cashQty_001" type="number" min="0" step="1" inputmode="numeric" placeholder="0" oninput="updateCashCount()"></div></div><div class="row3" style="margin-top:12px"><div class="metric"><b id="cashBillsTotal">₱0.00</b><span>BILLS</span></div><div class="metric"><b id="cashCoinsTotal">₱0.00</b><span>COINS</span></div><div class="metric"><b id="cashCountTotal">₱0.00</b><span>TOTAL CASH COUNTED</span></div></div><div id="cashCountStatus" class="muted" style="margin-top:10px" aria-live="polite">Not counted.</div><button type="button" class="secondary" style="margin-top:10px" onclick="confirmCashCount()">Confirm Cash Count</button></div>
  <div class="card">
-  <h2>Daily Total</h2>
+  <h2>Daily Total</h2><p class="muted" id="whSalesNotice">Wholesale transactions are included in totals; retail sales are finalized when both meter readings are entered.</p>
   <div class="row3"><div class="metric"><b id="totalAmount">₱0.00</b><span>SALES</span></div><div class="metric"><b id="totalLiters">0.00 L</b><span>LITERS SOLD</span></div><div class="metric"><b id="photoCount">0/3</b><span>PHOTOS</span></div></div>
   <div style="height:10px"></div><button onclick="saveDraft()">Save Draft & Verify Online</button>
   <div style="height:8px"></div><button type="button" class="secondary" onclick="loadDraft()">Retrieve Today’s Saved Readings</button>
@@ -900,6 +930,82 @@ function appliedFuelPrice(k){
   if(Number.isFinite(current)&&current>0 && (hasMeterReading(k,'OL')||hasMeterReading(k,'CL'))) dailyFuelPriceSnapshot[k]=current;
   return Number.isFinite(current)&&current>0?current:0;
 }
+
+const WH_CONTAINER_LITERS=20;
+let wholesaleSales=[];
+function whRound(n){return Math.round((Number(n)+Number.EPSILON)*100)/100;}
+function whActive(rows=wholesaleSales){return (Array.isArray(rows)?rows:[]).filter(r=>r&&!r.voided&&Number.isSafeInteger(Number(r.containers))&&Number(r.containers)>0);}
+function whStats(fuel=null,rows=wholesaleSales){
+ const a={containers:0,liters:0,sales:0,cost:0,profit:0};
+ for(const r of whActive(rows)){
+  if(fuel&&r.fuel!==fuel)continue;
+  const n=Number(r.containers);a.containers+=n;a.liters+=20*n;
+  a.sales+=whRound(n*Number(r.pricePerContainer||0));a.cost+=whRound(n*Number(r.costPerContainer||0));
+ }
+ a.sales=whRound(a.sales);a.cost=whRound(a.cost);a.profit=whRound(a.sales-a.cost);
+ return a;
+}
+function whPayments(rows=wholesaleSales){
+ const p={Cash:0,'GCash/Bank':0,Credit:0,Other:0};
+ for(const r of whActive(rows)){const k=Object.hasOwn(p,r.payment)?r.payment:'Other';p[k]+=whRound(Number(r.containers)*Number(r.pricePerContainer));}
+ for(const k in p)p[k]=whRound(p[k]);return p;
+}
+function whEscape(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+window.previewWholesale=function(){
+ const n=Number(document.getElementById('whCount').value||0),price=Number(document.getElementById('whSell').value||0),cost=Number(document.getElementById('whCost').value||0);
+ const ok=Number.isSafeInteger(n)&&n>0&&Number.isFinite(price)&&price>0&&Number.isFinite(cost)&&cost>0;
+ document.getElementById('whPreviewLiters').textContent=(ok?20*n:0).toFixed(2)+' L';
+ document.getElementById('whPreviewSales').textContent=peso(ok?n*price:0);
+ document.getElementById('whPreviewProfit').textContent=peso(ok?n*(price-cost):0);
+ document.getElementById('whPreviewNote').textContent=ok?'Gross profit per container: '+peso(price-cost)+' • Total unit cost: '+peso(n*cost):'Enter positive quantity, selling price and unit cost.';
+};
+function renderWholesale(){
+ const box=document.getElementById('wholesaleList'),a=whStats();if(!box)return;
+ box.innerHTML=wholesaleSales.length?wholesaleSales.map(r=>{
+  const n=Number(r.containers),rev=whRound(n*Number(r.pricePerContainer)),cost=whRound(n*Number(r.costPerContainer));
+  return '<div class="tx"><b>'+whEscape(r.fuel)+' — '+n+' × 20 L = '+(n*20)+' L</b>'
+   +'<small>Buyer: '+whEscape(r.customer||'Not specified')+' • '+whEscape(r.payment)
+   +' • Price '+peso(r.pricePerContainer)+' • Cost '+peso(r.costPerContainer)
+   +' • Revenue '+peso(rev)+' • Gross Profit '+peso(rev-cost)
+   +(r.reference?' • Ref '+whEscape(r.reference):'')+(r.voided?' • VOIDED':'')+'</small>'
+   +(r.voided?'':'<button type="button" class="mini" onclick="voidWholesaleSale(\''+whEscape(r.id)+'\')">Void Sale</button>')+'</div>';
+ }).join(''):'<small>No wholesale sales entered yet.</small>';
+ document.getElementById('whTotalContainers').textContent=String(a.containers);
+ document.getElementById('whTotalLiters').textContent=a.liters.toFixed(2)+' L';
+ document.getElementById('whTotalSales').textContent=peso(a.sales);
+ document.getElementById('whTotalProfit').textContent=peso(a.profit);
+}
+window.addWholesaleSale=function(){
+ if(!(currentRole==='admin'||currentRole==='personnel'))return;
+ if(document.getElementById('date').value!==localDateISO()){alert('Enter wholesale sales only for today.');return;}
+ const fuel=document.getElementById('whFuel').value,n=Number(document.getElementById('whCount').value),
+  ps=document.getElementById('whSell').value.trim(),cs=document.getElementById('whCost').value.trim(),
+  price=Number(ps),cost=Number(cs);
+ if(!['Regular','Premium','Diesel'].includes(fuel)||!Number.isSafeInteger(n)||n<1||!Number.isFinite(price)||price<=0||!Number.isFinite(cost)||cost<=0
+    ||!/^\d+(?:\.\d{1,2})?$/.test(ps)||!/^\d+(?:\.\d{1,2})?$/.test(cs)){
+  alert('Enter a positive integer number of containers and positive prices/costs with up to 2 decimal places.');return;
+ }
+ const k=fuel.toLowerCase();
+ if(hasMeterReading(k,'OL')&&hasMeterReading(k,'CL')&&(20*n+whStats(fuel).liters>whRound(val(k+'CL')-val(k+'OL'))+.005)){
+  alert('Wholesale container liters exceed the total liters measured by the dispenser. Check both amounts.');return;
+ }
+ if(!confirm('Record '+n+' wholesale container(s) of '+fuel+' ('+(n*20)+' L) for '+peso(n*price)+'? Already included in dispenser liters.'))return;
+ wholesaleSales.push({id:'WH'+Date.now()+'_'+Math.random().toString(36).slice(2,8),fuel,containers:n,liters:20*n,litersPerContainer:20,
+  pricePerContainer:whRound(price),costPerContainer:whRound(cost),sales:whRound(n*price),cost:whRound(n*cost),profit:whRound(n*(price-cost)),
+  payment:document.getElementById('whPayment').value,customer:document.getElementById('whCustomer').value.trim().slice(0,120),
+  reference:document.getElementById('whRef').value.trim().slice(0,120),recordedBy:currentUser,createdAt:new Date().toISOString(),voided:false});
+ for(const id of ['whCount','whSell','whCost','whCustomer','whRef'])document.getElementById(id).value='';
+ window.previewWholesale();renderWholesale();calc();if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0);
+};
+window.voidWholesaleSale=function(id){
+ if(!(currentRole==='admin'||currentRole==='personnel'))return;
+ if(document.getElementById('date').value!==localDateISO())return;
+ const r=wholesaleSales.find(x=>x.id===id&&!x.voided);
+ if(!r||!confirm('Void this wholesale sale? The entry remains for audit but is excluded from totals.'))return;
+ r.voided=true;r.voidedAt=new Date().toISOString();r.voidedBy=currentUser;
+ renderWholesale();calc();if(typeof scheduleOnlineAutosave==='function')scheduleOnlineAutosave(0);
+};
+
 function meterResult(k){
   const hasOpen=hasMeterReading(k,'OL'),hasClose=hasMeterReading(k,'CL'),price=appliedFuelPrice(k);
   if(!hasOpen&&!hasClose)return {complete:false,invalid:false,liters:0,sales:0,price,reason:'Enter opening and closing readings.'};
