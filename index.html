@@ -1117,9 +1117,12 @@ function reconcile(){
  document.getElementById('expectedCash').value=expected===null?'Check cash float':peso(expected);
  document.getElementById('cashVariance').value=variance===null?'Pending confirmed count':(variance>0?'+':'')+peso(variance);
  const w=document.getElementById('paymentWarning');
- if(Math.abs(diff)>0.009) w.innerHTML='<div style="font-size:13px;padding:10px;border-radius:10px;background:#fff3e8;color:#9a4b00;margin-top:10px"><b>Check:</b> Payment total does not equal dispenser sales. Difference: '+(diff>0?'+':'')+peso(diff)+'</div>';
- else if(disp>0) w.innerHTML='<div class="status">Payments reconcile with dispenser sales.</div>';
- else w.innerHTML='';
+ const pendingMeters=fuels.some(([k])=>!meterResult(k).complete);
+ if(fuels.some(([k])=>meterResult(k).invalid)){w.textContent='Meter/wholesale mismatch. Correct the readings or wholesale quantities before closing.';w.style.color='#9a4b00';}
+ else if(pendingMeters){w.textContent='Provisional payments and sales. Complete all dispenser opening/closing readings before confirming reconciliation.';w.style.color='#9a4b00';}
+ else if(Math.abs(diff)>0.009){w.textContent='Payment total differs from calculated retail + wholesale sales by '+(diff>0?'+':'')+peso(diff)+'. Check that wholesale receipts were not entered twice.';w.style.color='#9a4b00';}
+ else if(disp>0){w.textContent='Retail and wholesale payments reconcile with total fuel sales.';w.style.color='#18794e';}
+ else w.textContent='';
 }
 
 const STANDARD_FUEL_SUPPLIERS=['FUEL CENTRAL','TYB','DJ Gasoline Station'];
